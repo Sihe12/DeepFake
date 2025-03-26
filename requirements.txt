@@ -3,5 +3,7 @@ numpy
 opencv-python
 imageio[ffmpeg]
 mtcnn
-opencv-python
 scikit-image
+pandas
+matplotlib
+scikit-learn
