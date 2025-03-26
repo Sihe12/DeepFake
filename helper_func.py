@@ -3,6 +3,9 @@ import numpy as np
 import os
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import cv2
 
 def get_video_prediction(predictions, threshold=0.5, test_generator=None):
     # Extract video names from image filenames
@@ -71,105 +74,36 @@ def evaluate_video_predictions(y_true, y_pred, class_names=["REAL", "FAKE"], mod
     return metrics
 
 
-
-from tensorflow.keras import backend as K
-import tensorflow as tf
-import cv2
-
-
-def get_grad_cam_dual_input(model, rgb_image, ssim_image, class_idx, layer_name='block_16_project'):
-    """Generate Grad-CAM heatmap for dual-input model"""
-    # Convert class_idx to integer and verify model output shape
-    class_idx = int(class_idx)
-    
-    # Create gradient model
-    grad_model = tf.keras.models.Model(
-        inputs=model.inputs,
-        outputs=[model.get_layer(layer_name).output, model.output]
-    )
-    
-    # Prepare inputs with proper shapes
-    rgb_input = tf.cast(np.expand_dims(rgb_image, axis=0), tf.float32)  # [1, H, W, 3]
-    ssim_input = tf.cast(np.expand_dims(ssim_image[..., np.newaxis], axis=0), tf.float32)  # [1, H, W, 1]
-    
-    with tf.GradientTape() as tape:
-        # Get both outputs
-        conv_outputs, predictions = grad_model([rgb_input, ssim_input])
+def dual_input_generator(base_gen, ssim_dir):
+    while True:
+        batch_x, batch_y = next(base_gen)
         
-        # Handle single-output models (binary classification)
-        if predictions.shape[-1] == 1:
-            loss = predictions[0]  # For binary classification
-        else:
-            loss = predictions[:, class_idx]  # For multi-class
-    
-    # Compute gradients
-    grads = tape.gradient(loss, conv_outputs)
-    
-    # Guided Grad-CAM
-    cast_conv_outputs = tf.cast(conv_outputs > 0, "float32")
-    cast_grads = tf.cast(grads > 0, "float32")
-    guided_grads = cast_conv_outputs * cast_grads * grads
-    
-    # Weight the activation maps
-    weights = tf.reduce_mean(guided_grads, axis=(0, 1, 2))
-    cam = tf.reduce_sum(tf.multiply(weights, conv_outputs), axis=-1)
-    
-    # Process CAM
-    cam = np.maximum(cam, 0)
-    cam = cam[0]  # Take first (and only) item in batch
-    cam = cam / (np.max(cam) + 1e-10)  # Normalize with small epsilon
-    
-    return cam
+        batch_ssim = []
+        # Get the actual filepaths used for this batch
+        # current_indices = base_gen.index_array[
+        #     (base_gen.batch_index - 1) * base_gen.batch_size : 
+        #     base_gen.batch_index * base_gen.batch_size
+        # ]
+        current_indices = base_gen.index_array[
+            (base_gen.batch_index * base_gen.batch_size) % len(base_gen.index_array):
+            ((base_gen.batch_index + 1) * base_gen.batch_size) % len(base_gen.index_array)
+        ]
 
-import tensorflow as tf
-import numpy as np
-
-def get_grad_cam_single_input(model, rgb_image, class_idx, layer_name='block_16_project'):
-    """Generate Grad-CAM heatmap for a single-input model (without SSIM)"""
-    class_idx = int(class_idx)  # Ensure class index is an integer
-    
-    # Create a gradient model that outputs feature maps + predictions
-    grad_model = tf.keras.models.Model(
-        inputs=model.input,  # Single input (only images)
-        outputs=[model.get_layer(layer_name).output, model.output]
-    )
-    
-    # Prepare input
-    rgb_input = tf.cast(np.expand_dims(rgb_image, axis=0), tf.float32)  # Shape: [1, H, W, 3]
-    
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(rgb_input)
         
-        # Handle binary and multi-class cases
-        if predictions.shape[-1] == 1:
-            loss = predictions[0]  # Binary classification
-        else:
-            loss = predictions[:, class_idx]  # Multi-class classification
-    
-    # Compute gradients
-    grads = tape.gradient(loss, conv_outputs)
-    
-    # Apply Guided Grad-CAM
-    cast_conv_outputs = tf.cast(conv_outputs > 0, "float32")
-    cast_grads = tf.cast(grads > 0, "float32")
-    guided_grads = cast_conv_outputs * cast_grads * grads
-    
-    # Compute weights for each activation map
-    weights = tf.reduce_mean(guided_grads, axis=(0, 1, 2))
-    cam = tf.reduce_sum(tf.multiply(weights, conv_outputs), axis=-1)
-    
-    # Normalize and process CAM
-    cam = np.maximum(cam, 0)  # ReLU operation
-    cam = cam[0]  # Remove batch dimension
-    cam = cam / (np.max(cam) + 1e-10)  # Normalize to [0, 1] with epsilon
-    
-    return cam
+        for i in current_indices:
+            img_path = base_gen.filepaths[i]
+            rel_path = os.path.relpath(img_path, base_gen.directory)
+            mask_path = os.path.join(ssim_dir, os.path.splitext(rel_path)[0] + '.npy')
+            
+            # Load and process efficiently
+            ssim_map = np.load(mask_path)
+            ssim_map = cv2.resize(ssim_map, base_gen.target_size)
+            batch_ssim.append(ssim_map[..., np.newaxis].astype(np.float32))  # Changed to float32 for better compatibility
+        
+        # Ensure consistent batch size
+        if len(batch_x) != len(batch_ssim):
+            continue
+            
+        # Convert to tensors and return with proper structure
+        yield (tf.convert_to_tensor(batch_x), tf.convert_to_tensor(np.array(batch_ssim))), tf.convert_to_tensor(batch_y)
 
-
-def overlay_heatmap(image, heatmap, alpha=0.5, colormap=cv2.COLORMAP_JET):
-    """Overlay heatmap on image"""
-    heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, colormap)
-    overlayed = cv2.addWeighted(image, alpha, heatmap, 1 - alpha, 0)
-    return overlayed

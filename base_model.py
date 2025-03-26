@@ -7,11 +7,12 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+import random
 
 # load functions from helper_func.py
-from helper_func import get_video_prediction, evaluate_video_predictions, get_grad_cam_single_input, overlay_heatmap
+from helper_func import get_video_prediction, evaluate_video_predictions
 
-gpu = False
+gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
@@ -22,6 +23,11 @@ if gpu:
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     print(os.environ['CUDA_VISIBLE_DEVICES'])  # Check the value
 
+# Set seed for reproducibility
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
 
 batch_size = 16
 # Create ImageDataGenerators
@@ -116,7 +122,7 @@ checkpoint_cb = ModelCheckpoint("best_model.h5",
                                 verbose=1)
 
 early_stopping_cb = EarlyStopping(monitor="val_loss", 
-                                  patience=5,  # Stop if val_loss doesn't improve for 5 epochs
+                                  patience=10,  # Stop if val_loss doesn't improve for 5 epochs
                                   restore_best_weights=True, 
                                   verbose=1)
 
@@ -126,7 +132,7 @@ history = model.fit(
     steps_per_epoch=len(train_generator),  # Use original generator's length
     validation_data=val_generator,
     validation_steps=len(val_generator),   # Use original generator's length
-    epochs=2,
+    epochs=1,
     callbacks=[checkpoint_cb, early_stopping_cb],
     class_weight=class_weight_dict,
     verbose=1
@@ -150,34 +156,61 @@ metrics = evaluate_video_predictions(
 
 mapping_label = {0: 'REAL', 1: 'FAKE'}
 
-(images), labels = next(test_generator)
+# ... [Previous code remains the same until predictions] ...
 
-# Select an example
-idx = 0  # First in batch
-rgb_image = images[idx]
-true_label = int(labels[idx])  # Convert to integer
+# Get a batch of test images
+test_images, test_labels = next(test_generator)
 
-# Generate heatmap - use last conv layer before pooling
-heatmap = get_grad_cam_single_input(
-        model=model,
-        rgb_image=rgb_image,
-        class_idx=true_label,
-        layer_name='conv2d_2'  # Try different layers
-    )
-    
-# Visualization
-rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)
-overlay = overlay_heatmap(rgb_image_uint8, heatmap)
+# Select the first image from the batch for Grad-CAM visualization
+sample_idx = 0  # You can change this to view different samples
+rgb_image = test_images[sample_idx]
+true_label = int(test_labels[sample_idx])  # Convert to 0 or 1
 
-plt.figure(figsize=(10, 5))
-plt.subplot(1, 2, 1)
+# Get model's prediction for this image
+sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
+predicted_class = 1 if sample_prediction > threshold else 0
+
+from tf_keras_vis.gradcam import Gradcam
+# Create GradCAM object
+gradcam = Gradcam(model)
+
+def loss(output):
+    """Simple loss for binary classification"""
+    return output
+
+# Generate heatmap - use last conv layer ('conv2d_2' in your model)
+heatmap = gradcam(loss,
+                 np.expand_dims(rgb_image, axis=0),
+                 penultimate_layer='conv2d_2')  # Use your last conv layer name
+
+# Process heatmap
+heatmap = np.squeeze(heatmap)
+heatmap = np.maximum(heatmap, 0)
+heatmap /= np.max(heatmap)
+
+# Create visualization
+rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)  # Convert to 0-255 range
+
+# Simple overlay function if you don't have overlay_heatmap
+def simple_overlay(image, heatmap, alpha=0.5):
+    heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
+    heatmap = np.uint8(255 * heatmap)
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
+
+overlay = simple_overlay(rgb_image_uint8, heatmap)
+
+# Plot results
+plt.figure(figsize=(15, 5))
+plt.subplot(1, 3, 1)
 plt.imshow(rgb_image_uint8)
-plt.title(f"Original (Class {true_label})")
+plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
 plt.axis('off')
 
-plt.subplot(1, 2, 2)
+plt.subplot(1, 3, 2)
 plt.imshow(overlay)
-plt.title("Grad-CAM Heatmap")
+plt.title("Overlay")
 plt.axis('off')
-plt.show()
 
+plt.tight_layout()
+plt.show()
