@@ -65,13 +65,8 @@ else:
             reader = imageio.get_reader(video_path, "ffmpeg")
             total_frames = reader.count_frames()
 
-            if total_frames < num_frames:
-                print(f"Skipping video: {video_name} - Insufficient frames ({total_frames} < {num_frames})")
-                reader.close()
-                continue
             # Select frame indices
-            #selected_frame_indices = sorted(random.sample(range(total_frames), num_frames))
-            selected_frame_indices = list(range(min(num_frames, total_frames)))  # Select first num_frames frames
+            selected_frame_indices = sorted(random.sample(range(total_frames), num_frames))
 
             # Extract frames and process
             for i, frame in enumerate(reader):
@@ -248,79 +243,59 @@ else:
     save_images(train_images, 'train')
     save_images(val_images, 'val')
     save_images(test_images, 'test')
+    
+    
+    
+def SSIM_Avg():    
+    # --- Calculate average real image for SSIM ---
+    real_train_dir = os.path.join('train', '0')  # Assuming '0' is REAL class
+    real_image_files = [os.path.join(real_train_dir, f) for f in os.listdir(real_train_dir)]
+
+    # Compute average of all real training images
+    avg_real_image = np.zeros((224, 224), dtype=np.float32)
+    for img_file in real_image_files:
+        img = cv2.imread(img_file, cv2.IMREAD_GRAYSCALE)
+        if img is not None:
+            img = cv2.resize(img, (224, 224))
+            avg_real_image += img.astype(np.float32)
+    avg_real_image /= len(real_image_files)
+    avg_real_image = avg_real_image.astype(np.uint8)
+    return avg_real_image
+
+
 
 from skimage.metrics import structural_similarity as ssim
 
-def precompute_intra_video_ssim_masks(dataset_dir, save_dir, var_mean_save_dir):
-    os.makedirs(save_dir, exist_ok=True)
-    os.makedirs(var_mean_save_dir, exist_ok=True)
-        
+def precompute_ssim_masks(dataset_dir, save_dir, avg_real_image):
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
     for label in os.listdir(dataset_dir):
         label_dir = os.path.join(dataset_dir, label)
         label_save_dir = os.path.join(save_dir, label)
-        label_var_mean_dir = os.path.join(var_mean_save_dir, label)
-
         os.makedirs(label_save_dir, exist_ok=True)  # Create label directory
-        os.makedirs(label_var_mean_dir, exist_ok=True)  
 
-        # Group frames by video
-        video_frames = {}
         for img_file in os.listdir(label_dir):
-            video_name = img_file.split("_")[0]  # Extract video name
-            if video_name not in video_frames:
-                video_frames[video_name] = []
-            video_frames[video_name].append(img_file)
+            img_path = os.path.join(label_dir, img_file)
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
-        # Sort frames to ensure correct order
-        for video in video_frames:
-            video_frames[video] = sorted(video_frames[video])
-
-        # Compute SSIM for each video
-        for video_name, frames in video_frames.items():
-            num_frames = len(frames)
-
-            ssim_scores = []  # Store SSIM scores for mean/variance calculation
-
-            for i in range(num_frames):
-                img_path = os.path.join(label_dir, frames[i])
-                img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-
+            if img is not None:
                 img = cv2.resize(img, (224, 224))
 
-                # Select comparison frame
-                if i == 0:
-                    next_frame_path = os.path.join(label_dir, frames[i + 1])
-                    next_frame = cv2.imread(next_frame_path, cv2.IMREAD_GRAYSCALE)
- 
-                    next_frame = cv2.resize(next_frame, (224, 224))
-                    score, ssim_map = ssim(img, next_frame, full=True)
-                else:
-                    prev_frame_path = os.path.join(label_dir, frames[i - 1])
-                    prev_frame = cv2.imread(prev_frame_path, cv2.IMREAD_GRAYSCALE)
-                    prev_frame = cv2.resize(prev_frame, (224, 224))
-                    score, ssim_map = ssim(img, prev_frame, full=True)
+                # Compute SSIM map
+                _, ssim_map = ssim(img, avg_real_image, full=True)
 
-                ssim_scores.append(score)  # Save SSIM score for stats
-
-                # Normalize SSIM map to [0,1]
+               # Normalize to [0,1] and save as float32 numpy array
                 ssim_map = (ssim_map - ssim_map.min()) / (ssim_map.max() - ssim_map.min())
-
-                # Save SSIM mask as .npy
-                mask_path = os.path.join(label_save_dir, f"{os.path.splitext(frames[i])[0]}.npy")
+                mask_path = os.path.join(label_save_dir, f"{os.path.splitext(img_file)[0]}.npy")
                 np.save(mask_path, ssim_map.astype(np.float32))
                 
-                if ssim_scores:
-                    mean_ssim = np.mean(ssim_scores)
-                    variance_ssim = np.var(ssim_scores)
-                    var_mean_path = os.path.join(label_var_mean_dir, f"{video_name}.npy")
-                    np.save(var_mean_path, np.array([mean_ssim, variance_ssim], dtype=np.float32))
-            
-                
-# Precompute SSIM masks and variance/mean for each dataset
-if all(os.path.exists(folder) for folder in ['train_ssim', 'val_ssim', 'test_ssim']) and \
-   all(os.path.exists(folder) for folder in ['train_ssim_var_mean', 'val_ssim_var_mean', 'test_ssim_var_mean']):
-    print("Skipping processing: 'train_ssim, val_ssim, test_ssim, train_ssim_var_mean, val_ssim_var_mean, test_ssim_var_mean' folders already exist.")
+# Precompute SSIM masks for each dataset
+if os.path.exists('train_ssim') and os.path.exists('val_ssim') and os.path.exists('test_ssim'):
+    print("Skipping processing: 'train_ssim, val_ssim, test_ssim' folder is already full.")
 else:
-    precompute_intra_video_ssim_masks("train", 'train_ssim', 'train_ssim_var_mean')
-    precompute_intra_video_ssim_masks("val", 'val_ssim', 'val_ssim_var_mean')
-    precompute_intra_video_ssim_masks("test", 'test_ssim', 'test_ssim_var_mean')
+    # Save the images for each dataset
+    avg_real_image = SSIM_Avg()
+    precompute_ssim_masks("train", 'train_ssim', avg_real_image)
+    precompute_ssim_masks("val", 'val_ssim', avg_real_image)
+    precompute_ssim_masks("test", 'test_ssim', avg_real_image)
