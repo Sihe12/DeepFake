@@ -31,6 +31,7 @@ import os
 import random
 import json
 from mtcnn import MTCNN
+from skimage.metrics import structural_similarity as ssim
 
 # Paths
 data_folder = "data"
@@ -63,57 +64,92 @@ else:
 
         if video_name.endswith(".mp4"):
             reader = imageio.get_reader(video_path, "ffmpeg")
-            total_frames = reader.count_frames()
 
-            if total_frames < num_frames:
-                print(f"Skipping video: {video_name} - Insufficient frames ({total_frames} < {num_frames})")
-                reader.close()
-                continue
-            # Select frame indices
-            #selected_frame_indices = sorted(random.sample(range(total_frames), num_frames))
-            selected_frame_indices = list(range(min(num_frames, total_frames)))  # Select first num_frames frames
-
+            face_count = 0  # Track detected faces
+            
+            prev_face = None  # Store the previous face crop
+            
+            faces_to_save = []  # Temporarily store faces
             # Extract frames and process
             for i, frame in enumerate(reader):
-                if i in selected_frame_indices:
-                    frame_rgb = frame
-                    if frame.ndim == 2:  # if grayscale
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
-                    elif frame.shape[2] == 4:  # if RGBA
-                        frame_rgb = frame[:, :, :3]
-                    # Detect faces in the frame and choose the first face
-                    faces = detector.detect_faces(frame)
-                    
-                    # If no faces are found, skip this frame
-                    if len(faces) == 0:
-                        continue
+                if face_count >= num_frames:  
+                    break  # Stop early when 20 faces are extracted
+                
+                frame_rgb = frame
+                if frame.ndim == 2:  # if grayscale
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+                elif frame.shape[2] == 4:  # if RGBA
+                    frame_rgb = frame[:, :, :3]
+                # Detect faces in the frame and choose the first face
+                faces = detector.detect_faces(frame_rgb)
+                
+                # If no faces are found, skip this frame
+                if len(faces) == 0:
+                    continue
+                
+                selected_face = None
 
-                    # Get the bounding box of the first face
-                    face = faces[0]
-                    x, y, w, h = face['box']
+                if len(faces) == 1 or prev_face is None:  
+                    # If it's the first frame or only one face detected, pick the first face
+                    selected_face = faces[0]
+                else:
+                    # Compare all detected faces to the previous one and pick the most similar
+                    max_ssim = -1
+                    for face in faces:
+                        x, y, w, h = face['box']
+                        if w <= 0 or h <= 0:
+                            continue  
 
-                    # Crop the face region
-                    face_crop = frame[y:y+h, x:x+w]
-                    
-                    if face_crop.size == 0:  # Ensure the cropped face is valid
-                        continue
-                    
-                    # Resize the cropped face to 224x224
-                    face_resized = cv2.resize(face_crop, frame_size)
+                        face_crop = frame_rgb[y:y+h, x:x+w]
+                        face_resized = cv2.resize(face_crop, frame_size)
 
-                    # Generate a unique image name for the face
-                    image_name = f"{video_name.split('.')[0]}_{i}.jpg"
-                    image_path = os.path.join(output_folder, image_name)
+                        # Convert to grayscale for SSIM comparison
+                        face_gray = cv2.cvtColor(face_resized, cv2.COLOR_RGB2GRAY)
+                        prev_face_gray = cv2.cvtColor(prev_face, cv2.COLOR_RGB2GRAY)
 
-                    # Save the resized face image
-                    cv2.imwrite(image_path, face_resized)
+                        # Compute SSIM
+                        ssim_score = ssim(prev_face_gray, face_gray)
+                        
+                        if ssim_score > max_ssim:
+                            max_ssim = ssim_score
+                            selected_face = face
+            # Get bounding box of selected face
+                x, y, w, h = selected_face['box']
+                
+                # Ensure bounding box is valid
+                if w <= 0 or h <= 0:
+                    continue  
 
-                    # Store the label mapping
-                    video_metadata = video_labels.get(video_name)
-                    if video_metadata:
-                        image_labels[image_name] = video_metadata["label"]
+                # Crop the face region
+                face_crop = frame[y:y+h, x:x+w]
+                
+                if face_crop.size == 0:  # Ensure the cropped face is valid
+                    continue
+                
+                # Resize the cropped face to 224x224
+                face_resized = cv2.resize(face_crop, frame_size)
 
+                prev_face = face_resized  
+
+                faces_to_save.append((face_resized, f"{video_name.split('.')[0]}_{i}.jpg"))
+
+                face_count += 1  # Increment face count
+                
             reader.close()
+             # After processing the video, check if we have enough faces
+            if face_count < num_frames:
+                print(f"Skipping video: {video_name} - Less than {num_frames} faces detected.")
+                continue  # Skip saving if less than 20 faces
+
+            # Save the faces after processing the entire video
+            for face_resized, image_name in faces_to_save:
+                image_path = os.path.join(output_folder, image_name)
+                cv2.imwrite(image_path, face_resized)
+
+                # Store the label mapping
+                video_metadata = video_labels.get(video_name)
+                if video_metadata:
+                    image_labels[image_name] = video_metadata["label"]
 
     # Save the label mappings to a JSON file
     with open("image_labels.json", "w") as f:
