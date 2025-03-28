@@ -232,9 +232,6 @@ from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 # Get a test batch from dual generator
 (test_images, test_ssim, test_ssim_stats), test_labels = next(test_generator_dual.as_numpy_iterator())
 
-test_mean_ssim = test_ssim_stats[:, 0]  # First column is mean
-test_var_ssim = test_ssim_stats[:, 1]   # Second column is variance
-
 # Select example
 sample_idx = 0
 rgb_image = test_images[sample_idx]
@@ -256,13 +253,16 @@ def loss(output):
     """Simple loss for binary classification"""
     return output
 
-# Generate heatmap - focus only on RGB input
-heatmap = gradcam(loss,
-                 [np.expand_dims(rgb_image, axis=0),  # RGB input
-                 np.expand_dims(ssim_map, axis=0),    # SSIM input
-                 np.expand_dims(ssim_stats, axis=0)],  # SSIM stats input (mean + variance)
-                 penultimate_layer='conv2d_2',       # Last conv layer in RGB branch
-                 seek_penultimate_conv_layer=True)
+# Call Grad-CAM
+heatmap = gradcam(
+    loss,
+    [np.expand_dims(rgb_image, axis=0), np.expand_dims(ssim_map, axis=0), np.expand_dims(ssim_stats, axis=0)],  # Ensure correct input format
+    penultimate_layer='conv2d_2',
+    seek_penultimate_conv_layer=True,
+    expand_cam=False,  # Disable zooming for debugging
+    normalize_cam=True  # Optional: set to True to normalize heatmap
+)
+
 # Process heatmap
 heatmap = np.squeeze(heatmap)
 if len(heatmap.shape) > 2:  # If still multi-channel
