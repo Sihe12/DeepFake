@@ -156,61 +156,67 @@ metrics = evaluate_video_predictions(
 
 mapping_label = {0: 'REAL', 1: 'FAKE'}
 
-# ... [Previous code remains the same until predictions] ...
-
-# Get a batch of test images
-test_images, test_labels = next(test_generator)
-
-# Select the first image from the batch for Grad-CAM visualization
-sample_idx = 0  # You can change this to view different samples
-rgb_image = test_images[sample_idx]
-true_label = int(test_labels[sample_idx])  # Convert to 0 or 1
-
-# Get model's prediction for this image
-sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
-predicted_class = 1 if sample_prediction > threshold else 0
-
 from tf_keras_vis.gradcam import Gradcam
-# Create GradCAM object
-gradcam = Gradcam(model)
 
-def loss(output):
-    """Simple loss for binary classification"""
-    return output
+# Define the exit condition
+while True:
+    # Get a batch of test images
+    test_images, test_labels = next(test_generator)
 
-# Generate heatmap - use last conv layer ('conv2d_2' in your model)
-heatmap = gradcam(loss,
-                 np.expand_dims(rgb_image, axis=0),
-                 penultimate_layer='conv2d_2')  # Use your last conv layer name
+    # Select the first image from the batch for Grad-CAM visualization
+    sample_idx = 0  # You can change this to view different samples
+    rgb_image = test_images[sample_idx]
+    true_label = int(test_labels[sample_idx])  # Convert to 0 or 1
 
-# Process heatmap
-heatmap = np.squeeze(heatmap)
-heatmap = np.maximum(heatmap, 0)
-heatmap /= np.max(heatmap)
+    # Get model's prediction for this image
+    sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
+    predicted_class = 1 if sample_prediction > threshold else 0
 
-# Create visualization
-rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)  # Convert to 0-255 range
+    # Create GradCAM object
+    gradcam = Gradcam(model)
 
-# Simple overlay function if you don't have overlay_heatmap
-def simple_overlay(image, heatmap, alpha=0.5):
-    heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
+    def loss(output):
+        """Simple loss for binary classification"""
+        return output
 
-overlay = simple_overlay(rgb_image_uint8, heatmap)
+    # Generate heatmap - use last conv layer ('conv2d_2' in your model)
+    heatmap = gradcam(loss,
+                     np.expand_dims(rgb_image, axis=0),
+                     penultimate_layer='conv2d_2')  # Use your last conv layer name
 
-# Plot results
-plt.figure(figsize=(15, 5))
-plt.subplot(1, 3, 1)
-plt.imshow(rgb_image_uint8)
-plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
-plt.axis('off')
+    # Process heatmap
+    heatmap = np.squeeze(heatmap)
+    heatmap = np.maximum(heatmap, 0)
+    heatmap /= np.max(heatmap)
 
-plt.subplot(1, 3, 2)
-plt.imshow(overlay)
-plt.title("Overlay")
-plt.axis('off')
+    # Create visualization
+    rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)  # Convert to 0-255 range
 
-plt.tight_layout()
-plt.show()
+    # Simple overlay function if you don't have overlay_heatmap
+    def simple_overlay(image, heatmap, alpha=0.5):
+        heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
+        heatmap = np.uint8(255 * heatmap)
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
+
+    overlay = simple_overlay(rgb_image_uint8, heatmap)
+
+    # Plot results
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.imshow(rgb_image_uint8)
+    plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
+    plt.axis('off')
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(overlay)
+    plt.title("Overlay")
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Ask user if they are satisfied
+    user_input = input("Do you want to see another plot? Type 'exit' to stop, anything else to continue: ").strip().lower()
+    if user_input == 'exit':
+        break
