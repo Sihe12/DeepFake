@@ -74,36 +74,47 @@ def evaluate_video_predictions(y_true, y_pred, class_names=["REAL", "FAKE"], mod
     return metrics
 
 
-def dual_input_generator(base_gen, ssim_dir):
+def dual_input_generator(base_gen, ssim_dir, var_mean_dir):
     while True:
         batch_x, batch_y = next(base_gen)
         
         batch_ssim = []
+        batch_ssim_stats = []  # Combined mean and variance into one list
+
         # Get the actual filepaths used for this batch
-        # current_indices = base_gen.index_array[
-        #     (base_gen.batch_index - 1) * base_gen.batch_size : 
-        #     base_gen.batch_index * base_gen.batch_size
-        # ]
         current_indices = base_gen.index_array[
             (base_gen.batch_index * base_gen.batch_size) % len(base_gen.index_array):
             ((base_gen.batch_index + 1) * base_gen.batch_size) % len(base_gen.index_array)
         ]
 
-        
         for i in current_indices:
             img_path = base_gen.filepaths[i]
             rel_path = os.path.relpath(img_path, base_gen.directory)
+
+            # Load SSIM map
             mask_path = os.path.join(ssim_dir, os.path.splitext(rel_path)[0] + '.npy')
-            
-            # Load and process efficiently
             ssim_map = np.load(mask_path)
             ssim_map = cv2.resize(ssim_map, base_gen.target_size)
-            batch_ssim.append(ssim_map[..., np.newaxis].astype(np.float32))  # Changed to float32 for better compatibility
-        
+            batch_ssim.append(ssim_map[..., np.newaxis].astype(np.float32))  
+
+            # Load SSIM mean and variance
+            video_name = os.path.basename(img_path).split("_")[0]  # Extract video name
+            var_mean_path = os.path.join(var_mean_dir, video_name + '.npy')
+            
+            if os.path.exists(var_mean_path):
+                mean_var_values = np.load(var_mean_path)
+                mean_ssim, variance_ssim = mean_var_values[0], mean_var_values[1]
+            else:
+                mean_ssim, variance_ssim = 0.0, 0.0  # Default values if file is missing
+            
+            batch_ssim_stats.append([mean_ssim, variance_ssim])  # Combine into (2,) shape
+
         # Ensure consistent batch size
         if len(batch_x) != len(batch_ssim):
             continue
-            
-        # Convert to tensors and return with proper structure
-        yield (tf.convert_to_tensor(batch_x), tf.convert_to_tensor(np.array(batch_ssim))), tf.convert_to_tensor(batch_y)
 
+        # Convert to tensors and return in correct structure
+        yield ((tf.convert_to_tensor(batch_x), 
+                tf.convert_to_tensor(np.array(batch_ssim)), 
+                tf.convert_to_tensor(np.array(batch_ssim_stats), dtype=tf.float32)),  # Now shape (batch_size, 2)
+               tf.convert_to_tensor(batch_y))

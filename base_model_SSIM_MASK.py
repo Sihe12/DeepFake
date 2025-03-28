@@ -73,27 +73,52 @@ import cv2
 
 
 # Create final generators with output signatures
+# def get_generator_signature():
+#     # Define the output signature
+#     image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
+#     ssim_spec = tf.TensorSpec(shape=(None, 224, 224, 1), dtype=tf.float32)
+#     label_spec = tf.TensorSpec(shape=(None,), dtype=tf.float32)
+    
+#     return ((image_spec, ssim_spec), label_spec)
+
+# # Create generators with proper output signatures
+# train_generator_dual = tf.data.Dataset.from_generator(
+#     lambda: dual_input_generator(train_generator, 'train_ssim'),
+#     output_signature=get_generator_signature()
+# )
+
+# val_generator_dual = tf.data.Dataset.from_generator(
+#     lambda: dual_input_generator(val_generator, 'val_ssim'),
+#     output_signature=get_generator_signature()
+# )
+
+# test_generator_dual = tf.data.Dataset.from_generator(
+#     lambda: dual_input_generator(test_generator, 'test_ssim'),
+#     output_signature=get_generator_signature()
+# )
+
 def get_generator_signature():
-    # Define the output signature
+    # Define output signature
     image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
     ssim_spec = tf.TensorSpec(shape=(None, 224, 224, 1), dtype=tf.float32)
+    ssim_stats_spec = tf.TensorSpec(shape=(None, 2), dtype=tf.float32)  # Changed from two separate specs to one (batch_size, 2)
     label_spec = tf.TensorSpec(shape=(None,), dtype=tf.float32)
-    
-    return ((image_spec, ssim_spec), label_spec)
+
+    return ((image_spec, ssim_spec, ssim_stats_spec), label_spec)
 
 # Create generators with proper output signatures
 train_generator_dual = tf.data.Dataset.from_generator(
-    lambda: dual_input_generator(train_generator, 'train_ssim'),
+    lambda: dual_input_generator(train_generator, 'train_ssim', 'train_ssim_var_mean'),
     output_signature=get_generator_signature()
 )
 
 val_generator_dual = tf.data.Dataset.from_generator(
-    lambda: dual_input_generator(val_generator, 'val_ssim'),
+    lambda: dual_input_generator(val_generator, 'val_ssim', 'val_ssim_var_mean'),
     output_signature=get_generator_signature()
 )
 
 test_generator_dual = tf.data.Dataset.from_generator(
-    lambda: dual_input_generator(test_generator, 'test_ssim'),
+    lambda: dual_input_generator(test_generator, 'test_ssim', 'test_ssim_var_mean'),
     output_signature=get_generator_signature()
 )
 
@@ -138,14 +163,18 @@ x2 = MaxPooling2D(4)(x2)
 x2 = Conv2D(64, (3,3), activation='relu')(x2)
 x2 = GlobalAveragePooling2D()(x2)  # Ensures correct shape
 
-# 3. Merge both branches
-combined = Concatenate()([x1, x2])
+# 3. SSIM Statistics Branch (Mean & Variance)
+ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")  # Mean and variance as a 2D vector
+x3 = Dense(16, activation='relu')(ssim_stats_input)  # Small FC network
+x3 = Dense(8, activation='relu')(x3)
 
+# 3. Merge both branches
+combined = Concatenate()([x1, x2, x3])
 # 4. Classification head
 output = Dense(1, activation='sigmoid')(combined)
 
 # 5. Build model
-model = Model(inputs=[rgb_input, ssim_input], outputs=output)
+model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
 # Print model summary
@@ -201,17 +230,23 @@ from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 
 # Get a test batch from dual generator
-(test_images, test_ssim), test_labels = next(test_generator_dual.as_numpy_iterator())
+(test_images, test_ssim, test_ssim_stats), test_labels = next(test_generator_dual.as_numpy_iterator())
+
+test_mean_ssim = test_ssim_stats[:, 0]  # First column is mean
+test_var_ssim = test_ssim_stats[:, 1]   # Second column is variance
 
 # Select example
 sample_idx = 0
 rgb_image = test_images[sample_idx]
 ssim_map = test_ssim[sample_idx]
 true_label = int(test_labels[sample_idx])
-
+ssim_stats = test_ssim_stats[sample_idx]
 # Get prediction
-sample_prediction = model.predict([np.expand_dims(rgb_image, 0), 
-                                 np.expand_dims(ssim_map, 0)])[0][0]
+sample_prediction = model.predict([
+    np.expand_dims(rgb_image, 0), 
+    np.expand_dims(ssim_map, 0),
+    np.expand_dims(ssim_stats, 0)  # Use combined stats tensor
+])[0][0]
 predicted_class = 1 if sample_prediction > threshold else 0
 
 # Create GradCAM object with modifier for binary classification
@@ -224,10 +259,10 @@ def loss(output):
 # Generate heatmap - focus only on RGB input
 heatmap = gradcam(loss,
                  [np.expand_dims(rgb_image, axis=0),  # RGB input
-                 np.expand_dims(ssim_map, axis=0)],    # SSIM input (will be ignored in visualization)
-                 penultimate_layer='conv2d_2',          # Last conv layer in RGB branch
+                 np.expand_dims(ssim_map, axis=0),    # SSIM input
+                 np.expand_dims(ssim_stats, axis=0)],  # SSIM stats input (mean + variance)
+                 penultimate_layer='conv2d_2',       # Last conv layer in RGB branch
                  seek_penultimate_conv_layer=True)
-
 # Process heatmap
 heatmap = np.squeeze(heatmap)
 if len(heatmap.shape) > 2:  # If still multi-channel
