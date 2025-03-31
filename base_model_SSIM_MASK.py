@@ -16,7 +16,7 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '6'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -70,32 +70,6 @@ import tensorflow as tf
 import os
 import numpy as np
 import cv2
-
-
-# Create final generators with output signatures
-# def get_generator_signature():
-#     # Define the output signature
-#     image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
-#     ssim_spec = tf.TensorSpec(shape=(None, 224, 224, 1), dtype=tf.float32)
-#     label_spec = tf.TensorSpec(shape=(None,), dtype=tf.float32)
-    
-#     return ((image_spec, ssim_spec), label_spec)
-
-# # Create generators with proper output signatures
-# train_generator_dual = tf.data.Dataset.from_generator(
-#     lambda: dual_input_generator(train_generator, 'train_ssim'),
-#     output_signature=get_generator_signature()
-# )
-
-# val_generator_dual = tf.data.Dataset.from_generator(
-#     lambda: dual_input_generator(val_generator, 'val_ssim'),
-#     output_signature=get_generator_signature()
-# )
-
-# test_generator_dual = tf.data.Dataset.from_generator(
-#     lambda: dual_input_generator(test_generator, 'test_ssim'),
-#     output_signature=get_generator_signature()
-# )
 
 def get_generator_signature():
     # Define output signature
@@ -190,7 +164,7 @@ checkpoint_cb = ModelCheckpoint("best_model.h5",
                                 verbose=1)
 
 early_stopping_cb = EarlyStopping(monitor="val_loss", 
-                                  patience=10,  # Stop if val_loss doesn't improve for 5 epochs
+                                  patience=15,  # Stop if val_loss doesn't improve for 5 epochs
                                   restore_best_weights=True, 
                                   verbose=1)
 
@@ -200,24 +174,23 @@ history = model.fit(
     steps_per_epoch=len(train_generator),  # Use original generator's length
     validation_data=val_generator_dual,
     validation_steps=len(val_generator),   # Use original generator's length
-    epochs=1,
+    epochs=200,
     callbacks=[checkpoint_cb, early_stopping_cb],
     class_weight=class_weight_dict,
     verbose=1
 )
 
-predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
+predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
 
-predicted_classes = (predictions > threshold).astype(int).flatten()  # Convert to binary (0/1)
-
-
-video_predictions, video_true_value = get_video_prediction(predicted_classes, threshold, test_generator)
+video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
 
 # Evaluate
 metrics = evaluate_video_predictions(
-    y_true=video_predictions,
-    y_pred=video_true_value,
+    y_true=video_predictions_binary,
+    y_pred_probs = video_predictions_probs,
+    y_pred_binary=video_true_value,
+
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )

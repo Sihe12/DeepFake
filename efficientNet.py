@@ -16,7 +16,7 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '6'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -115,7 +115,7 @@ checkpoint_cb = ModelCheckpoint("best_model.h5",
                                 verbose=1)
 
 early_stopping_cb = EarlyStopping(monitor="val_loss", 
-                                  patience=10,  # Stop if val_loss doesn't improve for 5 epochs
+                                  patience=15,  # Stop if val_loss doesn't improve for 5 epochs
                                   restore_best_weights=True, 
                                   verbose=1)
 
@@ -125,7 +125,7 @@ history = model.fit(
     steps_per_epoch=len(train_generator),  # Use original generator's length
     validation_data=val_generator,
     validation_steps=len(val_generator),   # Use original generator's length
-    epochs=1,
+    epochs=200,
     callbacks=[checkpoint_cb, early_stopping_cb],
     class_weight=class_weight_dict,
     verbose=1
@@ -133,16 +133,15 @@ history = model.fit(
 
 predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
 
-predicted_classes = (predictions > threshold).astype(int).flatten()  # Convert to binary (0/1)
-
-
-video_predictions, video_true_value = get_video_prediction(predicted_classes, threshold, test_generator)
+video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
 
 # Evaluate
 metrics = evaluate_video_predictions(
-    y_true=video_predictions,
-    y_pred=video_true_value,
+    y_true=video_predictions_binary,
+    y_pred_probs = video_predictions_probs,
+    y_pred_binary=video_true_value,
+
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )
@@ -172,10 +171,9 @@ while True:
         """Simple loss for binary classification"""
         return output
 
-    # Generate heatmap - use last conv layer ('conv2d_2' in your model)
     heatmap = gradcam(loss,
                      np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer='conv2d_2')  # Use your last conv layer name
+                     penultimate_layer='top_conv')  # Use your last conv layer name
 
     # Process heatmap
     heatmap = np.squeeze(heatmap)

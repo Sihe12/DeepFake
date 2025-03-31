@@ -206,18 +206,17 @@ history = model.fit(
     verbose=1
 )
 
-predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
+predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
 
-predicted_classes = (predictions > threshold).astype(int).flatten()  # Convert to binary (0/1)
-
-
-video_predictions, video_true_value = get_video_prediction(predicted_classes, threshold, test_generator)
+video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
 
 # Evaluate
 metrics = evaluate_video_predictions(
-    y_true=video_predictions,
-    y_pred=video_true_value,
+    y_true=video_predictions_binary,
+    y_pred_probs = video_predictions_probs,
+    y_pred_binary=video_true_value,
+
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )
@@ -261,7 +260,7 @@ while True:
     heatmap = gradcam(
         loss,
         [np.expand_dims(rgb_image, axis=0), np.expand_dims(ssim_map, axis=0), np.expand_dims(ssim_stats, axis=0)],  # Ensure correct input format
-        penultimate_layer='conv2d_2',
+        penultimate_layer='top_conv',
         seek_penultimate_conv_layer=True,
         expand_cam=False,  # Disable zooming for debugging
         normalize_cam=True  # Optional: set to True to normalize heatmap

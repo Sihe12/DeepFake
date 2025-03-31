@@ -24,19 +24,23 @@ def get_video_prediction(predictions, threshold=0.5, test_generator=None):
             video_predictions[video].append(pred)
         true_labels [video] = true_value[video_names.index(video)]
         
+    video_preds_raw = {}
+
     # Calculate the total prediction for each video given the threshold
     video_preds = {}
 
     for video, preds in video_predictions.items():
         avg_pred = np.mean(preds)
         video_preds[video] = int(avg_pred > threshold)
+        video_preds_raw[video] = avg_pred
     
     videos = sorted(video_preds.keys())
-    y_pred = np.array([video_preds[v] for v in videos])
+    y_pred_probs = np.array([video_preds_raw[v] for v in videos])
+    y_pred_binary = np.array([video_preds[v] for v in videos])
     y_true = np.array([true_labels[v] for v in videos])
     
     # Return the final predictions and true values as numpy arrays
-    return y_true, y_pred
+    return y_true, y_pred_binary, y_pred_probs
 
 
 
@@ -46,31 +50,33 @@ from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
                             precision_score, recall_score, 
                             accuracy_score, roc_auc_score, f1_score)
 
-def evaluate_video_predictions(y_true, y_pred, class_names=["REAL", "FAKE"], model_name="Model"):
+def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=["REAL", "FAKE"], model_name="Model"):
 
     # Calculate metrics
     metrics = {
-        'accuracy': accuracy_score(y_true, y_pred),
-        'precision': precision_score(y_true, y_pred),
-        'recall': recall_score(y_true, y_pred),
-        'f1': f1_score(y_true, y_pred)
+        'accuracy': accuracy_score(y_true, y_pred_binary),
+        'precision': precision_score(y_true, y_pred_binary),
+        'recall': recall_score(y_true, y_pred_binary),
+        'f1': f1_score(y_true, y_pred_binary),
+        'auc_roc': roc_auc_score(y_true, y_pred_probs)  # Use raw probabilities for AUC-ROC
     }
     
     # Confusion matrix
-    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
-    
+    # Confusion matrix
+    cm = confusion_matrix(y_true, y_pred_binary, labels=[0, 1])
+
     # Plot confusion matrix
     plt.figure(figsize=(8, 6))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot(cmap=plt.cm.Blues, values_format='d')
     plt.title(f"{model_name} - Video-Level Prediction Confusion Matrix")
     plt.show()
-    
+
     # Print metrics
     print("\nClassification Metrics:")
     for name, value in metrics.items():
         print(f"{name.capitalize():<10}: {value:.4f}")
-    
+
     return metrics
 
 
