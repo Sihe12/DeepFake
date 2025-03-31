@@ -110,12 +110,15 @@ threshold = 0.5
 predictions = meso_model.predict(test_generator, steps=len(test_generator), verbose=1)
 predicted_classes = (predictions > threshold).astype(int).flatten()
 
-video_true_value, video_predictions, video_predictions_probs = get_video_prediction(predicted_classes, threshold, test_generator)
+video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
+
+# Evaluate
 metrics = evaluate_video_predictions(
-    y_true=video_predictions,
-    y_pred_probs=video_predictions_probs,
-    y_pred=video_true_value,
+    y_true=video_true_value,
+    y_pred_probs = video_predictions_probs,
+    y_pred_binary=video_predictions_binary,
+
     class_names=["REAL", "FAKE"],
-    model_name="MesoNet Detector"
+    model_name="Deepfake Detector"
 )
