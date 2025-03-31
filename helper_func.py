@@ -52,6 +52,8 @@ from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
 
 def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=["REAL", "FAKE"], model_name="Model"):
 
+    from sklearn.metrics import roc_curve
+
     # Calculate metrics
     metrics = {
         'accuracy': accuracy_score(y_true, y_pred_binary),
@@ -62,7 +64,6 @@ def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=
     }
     
     # Confusion matrix
-    # Confusion matrix
     cm = confusion_matrix(y_true, y_pred_binary, labels=[0, 1])
 
     # Plot confusion matrix
@@ -70,6 +71,18 @@ def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot(cmap=plt.cm.Blues, values_format='d')
     plt.title(f"{model_name} - Video-Level Prediction Confusion Matrix")
+    plt.show()
+
+    # Plot ROC curve
+    fpr, tpr, _ = roc_curve(y_true, y_pred_probs)
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='blue', lw=2, label=f"ROC Curve (AUC = {metrics['auc_roc']:.4f})")
+    plt.plot([0, 1], [0, 1], color="grey", linestyle="--")  # Diagonal line (random guessing)
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(f"{model_name} - ROC Curve")
+    plt.legend(loc="lower right")
+    plt.grid()
     plt.show()
 
     # Print metrics
