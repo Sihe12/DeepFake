@@ -213,9 +213,9 @@ video_true_value, video_predictions_binary, video_predictions_probs = get_video_
 
 # Evaluate
 metrics = evaluate_video_predictions(
-    y_true=video_predictions_binary,
+    y_true=video_true_value,
     y_pred_probs = video_predictions_probs,
-    y_pred_binary=video_true_value,
+    y_pred_binary=video_predictions_binary,
 
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
