@@ -56,14 +56,17 @@ val_generator = val_datagen.flow_from_directory(
     'val', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
+
 )
 
 test_generator = test_datagen.flow_from_directory(
     'test', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
 )
 
 import tensorflow as tf
@@ -180,7 +183,7 @@ history = model.fit(
     verbose=1
 )
 
-predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
+predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 

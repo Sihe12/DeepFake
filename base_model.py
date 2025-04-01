@@ -56,14 +56,17 @@ val_generator = val_datagen.flow_from_directory(
     'val', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
+
 )
 
 test_generator = test_datagen.flow_from_directory(
     'test', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
 )
 
 from sklearn.utils.class_weight import compute_class_weight

@@ -50,16 +50,20 @@ train_generator = train_datagen.flow_from_directory(
     class_mode='binary'
 )
 val_generator = val_datagen.flow_from_directory(
-    'val',
+    'val', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
+
 )
+
 test_generator = test_datagen.flow_from_directory(
-    'test',
+    'test', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
 )
 
 # Beregn class weights
@@ -67,26 +71,45 @@ class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=tra
 class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 print("Class weights:", class_weight_dict)
 
-# Definer MesoNet
-def build_meso_net(input_shape=(224, 224, 3)):
-    input_layer = Input(shape=input_shape)
-    x = Conv2D(8, (3, 3), padding='same', activation='relu')(input_layer)
-    x = MaxPooling2D(pool_size=(2, 2), strides=2)(x)
-    x = Conv2D(8, (5, 5), padding='same', activation='relu')(x)
-    x = MaxPooling2D(pool_size=(2, 2), strides=2)(x)
-    x = Conv2D(16, (5, 5), padding='same', activation='relu')(x)
-    x = MaxPooling2D(pool_size=(2, 2), strides=2)(x)
-    x = Conv2D(16, (5, 5), padding='same', activation='relu')(x)
-    x = MaxPooling2D(pool_size=(4, 4), strides=4)(x)
-    x = Flatten()(x)
-    x = Dense(16, activation='relu')(x)
-    output = Dense(1, activation='sigmoid')(x)
-    return Model(inputs=input_layer, outputs=output)
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, BatchNormalization, MaxPooling2D, Flatten, Dense, Dropout, LeakyReLU
+from tensorflow.keras.optimizers import Adam
 
-# Bygg og kompiler modell
-meso_model = build_meso_net()
-meso_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-meso_model.summary()
+input_shape = (224, 224, 3)
+
+# Build the model
+model = Sequential([
+    Conv2D(8, (3, 3), padding='same', activation='relu', input_shape=input_shape),
+    BatchNormalization(),
+    MaxPooling2D(pool_size=(2, 2), padding='same'),
+    
+    Conv2D(8, (5, 5), padding='same', activation='relu'),
+    BatchNormalization(),
+    MaxPooling2D(pool_size=(2, 2), padding='same'),
+    
+    Conv2D(16, (5, 5), padding='same', activation='relu'),
+    BatchNormalization(),
+    MaxPooling2D(pool_size=(2, 2), padding='same'),
+    
+    Conv2D(16, (5, 5), padding='same', activation='relu'),
+    BatchNormalization(),
+    MaxPooling2D(pool_size=(4, 4), padding='same'),
+    
+    Flatten(),
+    Dropout(0.5),
+    Dense(16),
+    LeakyReLU(alpha=0.1),
+    Dropout(0.5),
+    Dense(1, activation='sigmoid')
+])
+
+# Compile the model
+model.compile(optimizer=Adam(learning_rate=0.001),
+              loss='mean_squared_error',
+              metrics=['accuracy'])
+
+# Print model summary
+model.summary()
 
 # Callbacks
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping

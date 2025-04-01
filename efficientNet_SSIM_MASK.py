@@ -56,46 +56,23 @@ val_generator = val_datagen.flow_from_directory(
     'val', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
+
 )
 
 test_generator = test_datagen.flow_from_directory(
     'test', 
     target_size=(224, 224),
     batch_size=batch_size,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False 
 )
 
 import tensorflow as tf
 import os
 import numpy as np
 import cv2
-
-
-# Create final generators with output signatures
-# def get_generator_signature():
-#     # Define the output signature
-#     image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
-#     ssim_spec = tf.TensorSpec(shape=(None, 224, 224, 1), dtype=tf.float32)
-#     label_spec = tf.TensorSpec(shape=(None,), dtype=tf.float32)
-    
-#     return ((image_spec, ssim_spec), label_spec)
-
-# # Create generators with proper output signatures
-# train_generator_dual = tf.data.Dataset.from_generator(
-#     lambda: dual_input_generator(train_generator, 'train_ssim'),
-#     output_signature=get_generator_signature()
-# )
-
-# val_generator_dual = tf.data.Dataset.from_generator(
-#     lambda: dual_input_generator(val_generator, 'val_ssim'),
-#     output_signature=get_generator_signature()
-# )
-
-# test_generator_dual = tf.data.Dataset.from_generator(
-#     lambda: dual_input_generator(test_generator, 'test_ssim'),
-#     output_signature=get_generator_signature()
-# )
 
 def get_generator_signature():
     # Define output signature
@@ -146,7 +123,7 @@ input_shape = (224, 224)
 rgb_input = Input(shape=(*input_shape, 3), name="rgb_input")  # Named for clarity
 
 # Load EfficientNetB0 as the base model with pre-trained weights, excluding the top layer
-base_model_rgb = EfficientNetB0(weights='imagenet', include_top=False, input_shape=(*input_shape, 3))
+base_model_rgb = EfficientNetB0(weights='imagenet', include_top=False, input_tensor=rgb_input)
 
 # Make EfficientNetB0 model trainable
 base_model_rgb.trainable = True  # 
@@ -200,13 +177,13 @@ history = model.fit(
     steps_per_epoch=len(train_generator),  # Use original generator's length
     validation_data=val_generator_dual,
     validation_steps=len(val_generator),   # Use original generator's length
-    epochs=1,
+    epochs=200,
     callbacks=[checkpoint_cb, early_stopping_cb],
     class_weight=class_weight_dict,
     verbose=1
 )
 
-predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
+predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
