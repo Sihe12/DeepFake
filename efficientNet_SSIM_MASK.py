@@ -36,11 +36,9 @@ train_datagen = ImageDataGenerator(
     
     # Mild geometric transformations (to avoid distorting faces)
     rotation_range=5,            # Reduce rotation to prevent unnatural face angles
-    width_shift_range=0.05,      # Small shifts to avoid cropping face out
-    height_shift_range=0.05,     
-
+    width_shift_range=0.03,      # Small shifts to avoid cropping face out
+    height_shift_range=0.03,     
     # Controlled distortions
-    shear_range=0.1,             # Reduce shearing to prevent unrealistic warping
     zoom_range=0.05,             # Slight zoom without major distortion
     horizontal_flip=True,        # Keep flipping (deepfakes can be mirrored)
 
@@ -180,7 +178,7 @@ checkpoint_cb = ModelCheckpoint("best_model.h5",
                                 verbose=1)
 
 early_stopping_cb = EarlyStopping(monitor="val_loss", 
-                                  patience=20,  # Stop if val_loss doesn't improve for 5 epochs
+                                  patience=50,  # Stop if val_loss doesn't improve for 5 epochs
                                   restore_best_weights=True, 
                                   verbose=1)
 

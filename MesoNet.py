@@ -31,14 +31,17 @@ tf.random.set_seed(SEED)
 # Datageneratorer
 batch_size = 16
 train_datagen = ImageDataGenerator(
-    rescale=1./255,
-    rotation_range=10,
-    width_shift_range=0.1,
-    height_shift_range=0.1,
-    shear_range=0.2,
-    zoom_range=0.1,
-    horizontal_flip=True,
-    fill_mode='nearest'
+    rescale=1./255,              # Normalize pixel values to [0,1]
+    
+    # Mild geometric transformations (to avoid distorting faces)
+    rotation_range=5,            # Reduce rotation to prevent unnatural face angles
+    width_shift_range=0.03,      # Small shifts to avoid cropping face out
+    height_shift_range=0.03,     
+    # Controlled distortions
+    zoom_range=0.05,             # Slight zoom without major distortion
+    horizontal_flip=True,        # Keep flipping (deepfakes can be mirrored)
+
+    fill_mode='reflect'          # Avoid unnatural padding artifacts
 )
 val_datagen = ImageDataGenerator(rescale=1./255)
 test_datagen = ImageDataGenerator(rescale=1./255)
@@ -104,9 +107,20 @@ model = Sequential([
 ])
 
 # Compile the model
-model.compile(optimizer=Adam(learning_rate=0.001),
-              loss='mean_squared_error',
-              metrics=['accuracy'])
+# model.compile(optimizer=Adam(learning_rate=0.001),
+#               loss='mean_squared_error',
+#               metrics=['accuracy'])
+import tensorflow.keras.backend as K
+
+def focal_loss(alpha=0.25, gamma=2.0):
+    def loss(y_true, y_pred):
+        epsilon = K.epsilon()
+        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
+        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
+        return K.mean(loss)
+    return loss
+
+model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
 
 # Print model summary
 model.summary()
@@ -114,15 +128,15 @@ model.summary()
 # Callbacks
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 checkpoint_cb = ModelCheckpoint("meso_model.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
-early_stopping_cb = EarlyStopping(monitor="val_loss", patience=20, restore_best_weights=True, verbose=1)
+early_stopping_cb = EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True, verbose=1)
 
 # Tren modellen
-history = meso_model.fit(
+history = model.fit(
     train_generator,
     steps_per_epoch=len(train_generator),
     validation_data=val_generator,
     validation_steps=len(val_generator),
-    epochs=10,
+    epochs=200,
     callbacks=[checkpoint_cb, early_stopping_cb],
     class_weight=class_weight_dict,
     verbose=1
@@ -130,8 +144,7 @@ history = meso_model.fit(
 
 # Evaluer på testsettet
 threshold = 0.5
-predictions = meso_model.predict(test_generator, steps=len(test_generator), verbose=1)
-predicted_classes = (predictions > threshold).astype(int).flatten()
+predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
