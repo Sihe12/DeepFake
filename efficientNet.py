@@ -104,9 +104,7 @@ x = Dense(1, activation='sigmoid')(x)  # Output layer for binary classification
 # Create the final model
 model = Model(inputs=base_model.input, outputs=x)
 
-# model.compile(optimizer='adam',
-#                 loss='binary_crossentropy',
-#                 metrics=['accuracy'])
+
 import tensorflow.keras.backend as K
 
 def focal_loss(alpha=0.25, gamma=2.0):

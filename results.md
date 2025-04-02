@@ -1,10 +1,10 @@
 # Base Model
 Classification Metrics:
-Accuracy  : 0.3243
-Precision : 1.0000
-Recall    : 0.1525
-F1        : 0.2647
-Auc_roc   : 0.5932
+Accuracy  : 0.8649
+Precision : 0.9298
+Recall    : 0.8983
+F1        : 0.9138
+Auc_roc   : 0.8927
 
 
 # Base Model SSIM

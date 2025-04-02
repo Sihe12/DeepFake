@@ -113,10 +113,11 @@ test_generator_dual = tf.data.Dataset.from_generator(
 threshold = 0.5
 
 
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense, Dropout, GlobalAveragePooling2D, Concatenate
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Input, Dense, Dropout, GlobalAveragePooling2D, Concatenate, BatchNormalization
 from tensorflow.keras.applications import EfficientNetB0
-from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import Flatten, Conv2D, MaxPooling2D
+from tensorflow.keras.regularizers import l2
 
 input_shape = (224, 224)
 rgb_input = Input(shape=(*input_shape, 3), name="rgb_input")  # Named for clarity
@@ -131,20 +132,43 @@ x1 = GlobalAveragePooling2D()(base_model_rgb.output)  # Global Average Pooling t
 x1 = Dense(1, activation='sigmoid')(x1)
 
 # 2. SSIM Branch
-ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")  # Named for clarity
-x2 = Conv2D(16, (3,3), activation='relu')(ssim_input)
-x2 = MaxPooling2D(4)(x2)
-x2 = Conv2D(32, (3,3), activation='relu')(x2)
-x2 = MaxPooling2D(4)(x2)
-x2 = Conv2D(64, (3,3), activation='relu')(x2)
-x2 = GlobalAveragePooling2D()(x2)  # Ensures correct shape
+ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
+ssim_branch = Sequential([
+    Conv2D(32, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    Conv2D(64, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    Conv2D(128, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    Conv2D(256, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    GlobalAveragePooling2D(),
+
+    Dense(128, activation='relu', kernel_regularizer=l2(0.01)),  
+    Dropout(0.5),
+])
+
+x2 = ssim_branch(ssim_input)  # Correctly apply the input tensor
+
 
 # 3. SSIM Statistics Branch (Mean & Variance)
-ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")  # Mean and variance as a 2D vector
-x3 = Dense(16, activation='relu')(ssim_stats_input)  # Small FC network
-x3 = Dense(8, activation='relu')(x3)
+ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
+ssim_stats_branch = Sequential([
+    Dense(16, activation='relu', input_shape=(2,)),
+    Dense(8, activation='relu')
+])
 
-# 3. Merge both branches
+x3 = ssim_stats_branch(ssim_stats_input)  # Correctly apply the input tensor
+
+# 4. Merge All Branches
 combined = Concatenate()([x1, x2, x3])
 # 4. Classification head
 output = Dense(1, activation='sigmoid')(combined)
