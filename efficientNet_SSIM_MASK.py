@@ -16,7 +16,7 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '6'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -32,18 +32,20 @@ tf.random.set_seed(SEED)
 batch_size = 16
 # Create ImageDataGenerators
 train_datagen = ImageDataGenerator(
-    rescale=1./255,              # Normalize pixel values to [0, 1]
-    rotation_range=10,           # Randomly rotate images by up to 10 degrees
-    width_shift_range=0.1,       # Randomly shift images horizontally by 10% of the width
-    height_shift_range=0.1,      # Randomly shift images vertically by 10% of the height
-    shear_range=0.2,             # Apply shearing transformations
-    zoom_range=0.1,              # Randomly zoom in or out by 20%
-    horizontal_flip=True,        # Randomly flip images horizontally
-    fill_mode='nearest'          # Fill missing pixels after transformations,
+    rescale=1./255,              # Normalize pixel values to [0,1]
+    
+    # Mild geometric transformations (to avoid distorting faces)
+    rotation_range=5,            # Reduce rotation to prevent unnatural face angles
+    width_shift_range=0.05,      # Small shifts to avoid cropping face out
+    height_shift_range=0.05,     
 
+    # Controlled distortions
+    shear_range=0.1,             # Reduce shearing to prevent unrealistic warping
+    zoom_range=0.05,             # Slight zoom without major distortion
+    horizontal_flip=True,        # Keep flipping (deepfakes can be mirrored)
+
+    fill_mode='reflect'          # Avoid unnatural padding artifacts
 )
-val_datagen = ImageDataGenerator(rescale=1./255)
-test_datagen = ImageDataGenerator(rescale=1./255)
 # Create generators
 train_generator = train_datagen.flow_from_directory(
     'train',                   
@@ -51,6 +53,9 @@ train_generator = train_datagen.flow_from_directory(
     batch_size=batch_size,              
     class_mode='binary'    
 )
+val_datagen = ImageDataGenerator(rescale=1./255)
+test_datagen = ImageDataGenerator(rescale=1./255)
+
 
 val_generator = val_datagen.flow_from_directory(
     'val', 
@@ -83,12 +88,19 @@ def get_generator_signature():
 
     return ((image_spec, ssim_spec, ssim_stats_spec), label_spec)
 
+from sklearn.utils.class_weight import compute_class_weight
+
+class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=train_generator.classes)
+# Convert to dictionary format for Keras
+class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
+
+print("Computed class weights:", class_weight_dict)
+
 # Create generators with proper output signatures
 train_generator_dual = tf.data.Dataset.from_generator(
     lambda: dual_input_generator(train_generator, 'train_ssim', 'train_ssim_var_mean'),
     output_signature=get_generator_signature()
 )
-
 val_generator_dual = tf.data.Dataset.from_generator(
     lambda: dual_input_generator(val_generator, 'val_ssim', 'val_ssim_var_mean'),
     output_signature=get_generator_signature()
@@ -98,17 +110,6 @@ test_generator_dual = tf.data.Dataset.from_generator(
     lambda: dual_input_generator(test_generator, 'test_ssim', 'test_ssim_var_mean'),
     output_signature=get_generator_signature()
 )
-
-from sklearn.utils.class_weight import compute_class_weight
-
-class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=train_generator.classes)
-
-# Convert to dictionary format for Keras
-class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
-
-print("Computed class weights:", class_weight_dict)
-
-
 
 
 threshold = 0.5
@@ -152,8 +153,20 @@ output = Dense(1, activation='sigmoid')(combined)
 
 # 5. Build model
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
+#model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+import tensorflow.keras.backend as K
+
+def focal_loss(alpha=0.25, gamma=2.0):
+    def loss(y_true, y_pred):
+        epsilon = K.epsilon()
+        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
+        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
+        return K.mean(loss)
+    return loss
+
+model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
 # Print model summary
 model.summary()
 
@@ -167,10 +180,9 @@ checkpoint_cb = ModelCheckpoint("best_model.h5",
                                 verbose=1)
 
 early_stopping_cb = EarlyStopping(monitor="val_loss", 
-                                  patience=10,  # Stop if val_loss doesn't improve for 5 epochs
+                                  patience=20,  # Stop if val_loss doesn't improve for 5 epochs
                                   restore_best_weights=True, 
                                   verbose=1)
-
 
 history = model.fit(
     train_generator_dual,
@@ -182,6 +194,8 @@ history = model.fit(
     class_weight=class_weight_dict,
     verbose=1
 )
+
+
 
 predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 

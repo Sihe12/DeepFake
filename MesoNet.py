@@ -114,7 +114,7 @@ model.summary()
 # Callbacks
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 checkpoint_cb = ModelCheckpoint("meso_model.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
-early_stopping_cb = EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True, verbose=1)
+early_stopping_cb = EarlyStopping(monitor="val_loss", patience=20, restore_best_weights=True, verbose=1)
 
 # Tren modellen
 history = meso_model.fit(

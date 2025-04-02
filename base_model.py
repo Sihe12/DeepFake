@@ -125,7 +125,7 @@ checkpoint_cb = ModelCheckpoint("best_model.h5",
                                 verbose=1)
 
 early_stopping_cb = EarlyStopping(monitor="val_loss", 
-                                  patience=15,  # Stop if val_loss doesn't improve for 5 epochs
+                                  patience=20,  # Stop if val_loss doesn't improve for 5 epochs
                                   restore_best_weights=True, 
                                   verbose=1)
 
