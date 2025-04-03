@@ -9,11 +9,12 @@ Auc_roc   : 0.8927
 
 # Base Model SSIM
 Classification Metrics:
-Accuracy  : 0.6757
-Precision : 0.8431
-Recall    : 0.7288
-F1        : 0.7818
-Auc_roc   : 0.6542
+Accuracy  : 0.7703
+Precision : 0.9038
+Recall    : 0.7966
+F1        : 0.8468
+Auc_roc   : 0.8554
+
 ![alt text](base:model_SSIM.png)
 
 # Efficient
