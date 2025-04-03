@@ -19,11 +19,12 @@ Auc_roc   : 0.8554
 
 # Efficient
 Classification Metrics:
-Accuracy  : 0.7973
-Precision : 0.7973
-Recall    : 1.0000
-F1        : 0.8872
-Auc_roc   : 0.3525
+Accuracy  : 0.4730
+Precision : 0.7174
+Recall    : 0.5593
+F1        : 0.6286
+Auc_roc   : 0.4124
+
 
 # Efficient SSIM
 Classification Metrics:
@@ -31,12 +32,6 @@ Accuracy  : 0.7973
 Precision : 0.7973
 Recall    : 1.0000
 F1        : 0.8872
-Auc_roc   : 0.6232
+Auc_roc   : 0.4288
 
-# Efficient SSIM Focal
-Classification Metrics:
-Accuracy  : 0.6081
-Precision : 0.9412
-Recall    : 0.5424
-F1        : 0.6882
-Auc_roc   : 0.7412
+
