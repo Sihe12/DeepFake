@@ -9,4 +9,6 @@ matplotlib
 scikit-learn
 tf-keras-vis
 imbalanced-learn
+tensorflow-addons
+keras-cv
 

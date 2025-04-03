@@ -290,7 +290,7 @@ while True:
     heatmap = gradcam(
         loss,
         [np.expand_dims(rgb_image, axis=0), np.expand_dims(ssim_map, axis=0), np.expand_dims(ssim_stats, axis=0)],  # Ensure correct input format
-        penultimate_layer='conv2d_2',
+        penultimate_layer='conv2d_4',
         seek_penultimate_conv_layer=True,
         expand_cam=False,  # Disable zooming for debugging
         normalize_cam=True  # Optional: set to True to normalize heatmap
