@@ -34,4 +34,10 @@ Recall    : 1.0000
 F1        : 0.8872
 Auc_roc   : 0.4288
 
-
+# Mesonet
+Classification Metrics:
+Accuracy  : 0.7162
+Precision : 0.9130
+Recall    : 0.7119
+F1        : 0.8000
+Auc_roc   : 0.8576

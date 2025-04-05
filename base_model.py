@@ -210,7 +210,7 @@ while True:
     # Generate heatmap - use last conv layer ('conv2d_2' in your model)
     heatmap = gradcam(loss,
                      np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer='conv2d_4')  # Use your last conv layer name
+                     penultimate_layer='conv2d_3')  # Use your last conv layer name
 
     # Process heatmap
     heatmap = np.squeeze(heatmap)

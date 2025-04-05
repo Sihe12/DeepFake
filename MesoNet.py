@@ -191,7 +191,7 @@ while True:
     # Generate heatmap
     heatmap = gradcam(loss,
                      np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer='conv2d_4')
+                     penultimate_layer='conv2d_3')
 
     # Process heatmap
     heatmap = np.squeeze(heatmap)
