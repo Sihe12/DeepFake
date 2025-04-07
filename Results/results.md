@@ -41,3 +41,11 @@ Precision : 0.9423<br>
 Recall    : 0.8305<br>
 F1        : 0.8829<br>
 Auc_roc   : 0.9198
+
+# MesoNet-Inception
+Classification Metrics:<br>
+Accuracy  : 0.8514<br>
+Precision : 0.9286<br>
+Recall    : 0.8814<br>
+F1        : 0.9043<br>
+Auc_roc   : 0.8847
