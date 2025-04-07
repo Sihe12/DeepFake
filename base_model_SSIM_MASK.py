@@ -279,6 +279,12 @@ while True:
     ])[0][0]
     predicted_class = 1 if sample_prediction > threshold else 0
 
+    penultimate_layer_name = None
+    for layer in reversed(model.layers):
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            penultimate_layer_name = layer.name
+            break
+
     # Create GradCAM object with modifier for binary classification
     gradcam = Gradcam(model, model_modifier=ReplaceToLinear())
 
@@ -290,7 +296,7 @@ while True:
     heatmap = gradcam(
         loss,
         [np.expand_dims(rgb_image, axis=0), np.expand_dims(ssim_map, axis=0), np.expand_dims(ssim_stats, axis=0)],  # Ensure correct input format
-        penultimate_layer='conv2d_3',
+        penultimate_layer=penultimate_layer_name,
         seek_penultimate_conv_layer=True,
         expand_cam=False,  # Disable zooming for debugging
         normalize_cam=True  # Optional: set to True to normalize heatmap

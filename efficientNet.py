@@ -178,6 +178,11 @@ while True:
     sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
     predicted_class = 1 if sample_prediction > threshold else 0
 
+    penultimate_layer_name = None
+    for layer in reversed(model.layers):
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            penultimate_layer_name = layer.name
+            break
     # Create GradCAM object
     gradcam = Gradcam(model)
 
@@ -187,7 +192,7 @@ while True:
 
     heatmap = gradcam(loss,
                      np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer='top_conv')  # Use your last conv layer name
+                     penultimate_layer=penultimate_layer_name)  # Use your last conv layer name
 
     # Process heatmap
     heatmap = np.squeeze(heatmap)
