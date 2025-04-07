@@ -1,50 +1,43 @@
 # Base Model
-Classification Metrics:
-Accuracy  : 0.8649
-Precision : 0.9298
-Recall    : 0.8983
-F1        : 0.9138
+Classification Metrics:<br>
+Accuracy  : 0.8649<br>
+Precision : 0.9298<br>
+Recall    : 0.8983<br>
+F1        : 0.9138<br>
 Auc_roc   : 0.8927
 
 
 # Base Model SSIM
-Classification Metrics:
-Accuracy  : 0.7703
-Precision : 0.9038
-Recall    : 0.7966
-F1        : 0.8468
+Classification Metrics:<br>
+Accuracy  : 0.7703<br>
+Precision : 0.9038<br>
+Recall    : 0.7966<br>
+F1        : 0.8468<br>
 Auc_roc   : 0.8554
 
 ![alt text](base:model_SSIM.png)
 
 # Efficient
-Classification Metrics:
-Accuracy  : 0.4730
-Precision : 0.7174
-Recall    : 0.5593
-F1        : 0.6286
+Classification Metrics:<br>
+Accuracy  : 0.4730<br>
+Precision : 0.7174<br>
+Recall    : 0.5593<br>
+F1        : 0.6286<br>
 Auc_roc   : 0.4124
 
 
 # Efficient SSIM
-Classification Metrics:
-Accuracy  : 0.7973
-Precision : 0.7973
-Recall    : 1.0000
-F1        : 0.8872
+Classification Metrics:<br>
+Accuracy  : 0.7973<br>
+Precision : 0.7973<br>
+Recall    : 1.0000<br>
+F1        : 0.8872<br>
 Auc_roc   : 0.4288
 
 # Mesonet
-Classification Metrics:
-Accuracy  : 0.7162
-Precision : 0.9130
-Recall    : 0.7119
-F1        : 0.8000
-Auc_roc   : 0.8576
-# MesoNet
-Classification Metrics:
-Accuracy  : 0.8378
-Precision : 0.9434
-Recall    : 0.8475
-F1        : 0.8929
-Auc_roc   : 0.9243
+Classification Metrics:<br>
+Accuracy  : 0.8243<br>
+Precision : 0.9423<br>
+Recall    : 0.8305<br>
+F1        : 0.8829<br>
+Auc_roc   : 0.9198
