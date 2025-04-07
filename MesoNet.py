@@ -16,7 +16,7 @@ from helper_func import get_video_prediction, evaluate_video_predictions
 
 # Bruk GPU hvis tilgjengelig
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 physical_devices = tf.config.list_physical_devices('GPU')
 for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -160,9 +160,6 @@ metrics = evaluate_video_predictions(
 )
 
 
-
-
-
 mapping_label = {0: 'REAL', 1: 'FAKE'}
 
 from tf_keras_vis.gradcam import Gradcam
@@ -181,6 +178,13 @@ while True:
     sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
     predicted_class = 1 if sample_prediction > threshold else 0
 
+    # find penultimate layer name
+    penultimate_layer_name = None
+    for layer in reversed(model.layers):
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            penultimate_layer_name = layer.name
+            break
+
     # Create GradCAM object
     gradcam = Gradcam(model)
 
@@ -191,7 +195,7 @@ while True:
     # Generate heatmap
     heatmap = gradcam(loss,
                      np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer='conv2d_3')
+                     penultimate_layer=penultimate_layer_name)  # Use your last conv layer name
 
     # Process heatmap
     heatmap = np.squeeze(heatmap)
