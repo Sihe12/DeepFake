@@ -191,8 +191,40 @@ metrics = evaluate_video_predictions(
 mapping_label = {0: 'REAL', 1: 'FAKE'}
 
 from tf_keras_vis.gradcam import Gradcam
+from sklearn.manifold import TSNE
 
-# Define the exit condition
+feature_model = Model(inputs=model.input, outputs=model.layers[-3].output)
+
+all_images = []
+all_labels = []
+
+for i in range(len(test_generator)):
+    x_batch, y_batch = test_generator[i]
+    all_images.append(x_batch)
+    all_labels.append(y_batch)
+
+all_images = np.concatenate(all_images, axis=0)
+all_labels = np.concatenate(all_labels, axis=0)
+
+features = feature_model.predict(all_images, batch_size=batch_size, verbose=1)
+
+tsne = TSNE(n_components=2, perplexity=30, learning_rate=200, random_state=SEED)
+features_2d = tsne.fit_transform(features)
+
+plt.figure(figsize=(10, 7))
+for label in np.unique(all_labels):
+    idx = all_labels == label
+    plt.scatter(features_2d[idx, 0], features_2d[idx, 1], label=mapping_label[int(label)], alpha=0.6)
+
+plt.legend()
+plt.title("TSNE of features")
+plt.xlabel("TSNE component 1")
+plt.ylabel("TSNE component 2")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("tsne_visualisering.png")
+plt.close()
+
 while True:
     # Get a batch of test images
     test_images, test_labels = next(test_generator)
@@ -214,48 +246,50 @@ while True:
     # Create GradCAM object
     gradcam = Gradcam(model)
 
-    def loss(output):
-        """Simple loss for binary classification"""
-        return output
-
-    # Generate heatmap
-    heatmap = gradcam(loss,
-                     np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer=penultimate_layer_name)
-
-    # Process heatmap
-    heatmap = np.squeeze(heatmap)
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= np.max(heatmap)
-
-    # Create visualization
-    rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)  # Convert to 0-255 range
-
-    # Simple overlay function if you don't have overlay_heatmap
-    def simple_overlay(image, heatmap, alpha=0.5):
-        heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
-
-    overlay = simple_overlay(rgb_image_uint8, heatmap)
-
-    # Plot results
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    plt.imshow(rgb_image_uint8)
-    plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
-    plt.axis('off')
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(overlay)
-    plt.title("Overlay")
-    plt.axis('off')
-
-    plt.tight_layout()
-    plt.show()
-
-    # Ask user if they are satisfied
+    # Loop over de første 5 bildene
+    for sample_idx in range(5):
+        rgb_image = test_images[sample_idx]
+        true_label = int(test_labels[sample_idx])
+    
+        prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
+        predicted_class = 1 if prediction > threshold else 0
+    
+        def loss(output):
+            return output
+    
+        heatmap = gradcam(loss,
+                          np.expand_dims(rgb_image, axis=0),
+                          penultimate_layer=penultimate_layer_name)
+    
+        heatmap = np.squeeze(heatmap)
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= np.max(heatmap)
+    
+        rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)
+    
+        def simple_overlay(image, heatmap, alpha=0.5):
+            heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
+            heatmap = np.uint8(255 * heatmap)
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+            return cv2.addWeighted(image, alpha, heatmap, 1 - alpha, 0)
+    
+        overlay = simple_overlay(rgb_image_uint8, heatmap)
+    
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.imshow(rgb_image_uint8)
+        plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({prediction:.2f})")
+        plt.axis('off')
+    
+        plt.subplot(1, 2, 2)
+        plt.imshow(overlay)
+        plt.title("Grad-CAM Overlay")
+        plt.axis('off')
+    
+        plt.tight_layout()
+        plt.savefig(f'gradcam_{sample_idx}.png')
+        plt.close()
+    
     user_input = input("Do you want to see another plot? Type 'exit' to stop, anything else to continue: ").strip().lower()
     if user_input == 'exit':
         break

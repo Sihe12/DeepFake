@@ -36,16 +36,16 @@ Auc_roc   : 0.4288
 
 # Mesonet
 Classification Metrics:<br>
-Accuracy  : 0.8243<br>
-Precision : 0.9423<br>
-Recall    : 0.8305<br>
-F1        : 0.8829<br>
-Auc_roc   : 0.9198
+Accuracy  : 0.8919<br>
+Precision : 0.9474<br>
+Recall    : 0.9153<br>
+F1        : 0.9310<br>
+Auc_roc   : 0.9288
 
 # MesoNet-Inception
 Classification Metrics:<br>
-Accuracy  : 0.8514<br>
-Precision : 0.9286<br>
-Recall    : 0.8814<br>
-F1        : 0.9043<br>
-Auc_roc   : 0.8847
+Accuracy  : 0.8108<br>
+Precision : 0.9592<br>
+Recall    : 0.7966<br>
+F1        : 0.8704<br>
+Auc_roc   : 0.9130

@@ -163,14 +163,47 @@ metrics = evaluate_video_predictions(
 mapping_label = {0: 'REAL', 1: 'FAKE'}
 
 from tf_keras_vis.gradcam import Gradcam
+from sklearn.manifold import TSNE
 
+feature_model = Model(inputs=model.input, outputs=model.layers[-3].output)
+
+all_images = []
+all_labels = []
+
+for i in range(len(test_generator)):
+    x_batch, y_batch = test_generator[i]
+    all_images.append(x_batch)
+    all_labels.append(y_batch)
+
+all_images = np.concatenate(all_images, axis=0)
+all_labels = np.concatenate(all_labels, axis=0)
+
+features = feature_model.predict(all_images, batch_size=batch_size, verbose=1)
+
+tsne = TSNE(n_components=2, perplexity=30, learning_rate=200, random_state=SEED)
+features_2d = tsne.fit_transform(features)
+
+plt.figure(figsize=(10, 7))
+for label in np.unique(all_labels):
+    idx = all_labels == label
+    plt.scatter(features_2d[idx, 0], features_2d[idx, 1], label=mapping_label[int(label)], alpha=0.6)
+
+plt.legend()
+plt.title("TSNE of features")
+plt.xlabel("TSNE component 1")
+plt.ylabel("TSNE component 2")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("tsne_visualisering.png")
+plt.close()
+count = 0
 # Define the exit condition
 while True:
     # Get a batch of test images
     test_images, test_labels = next(test_generator)
 
     # Select the first image from the batch for Grad-CAM visualization
-    sample_idx = 0  # You can change this to view different samples
+    sample_idx = 0
     rgb_image = test_images[sample_idx]
     true_label = int(test_labels[sample_idx])  # Convert to 0 or 1
 
@@ -227,8 +260,8 @@ while True:
     plt.axis('off')
 
     plt.tight_layout()
-    plt.show()
-
+    plt.savefig(f'gradcam_{count}.png')
+    count += 1
     # Ask user if they are satisfied
     user_input = input("Do you want to see another plot? Type 'exit' to stop, anything else to continue: ").strip().lower()
     if user_input == 'exit':
