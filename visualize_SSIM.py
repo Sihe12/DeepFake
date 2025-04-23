@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Load the SSIM mask
-ssim_mask = np.load("train_ssim/0/abarnvbtwb_0.npy")  # Change the path accordingly
+ssim_mask = np.load("test_ssim/0/axntxmycwd_0.npy")  # Change the path accordingly
 
 # Display the image
 plt.figure(figsize=(6, 6))
