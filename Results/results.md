@@ -42,6 +42,14 @@ Recall    : 0.9153<br>
 F1        : 0.9310<br>
 Auc_roc   : 0.9288
 
+# Mesonet SSIM
+Classification Metrics:<br>
+Accuracy  : 0.8378<br>
+Precision : 0.9273<br>
+Recall    : 0.8644<br>
+F1        : 0.8947<br>
+Auc_roc   : 0.9141
+
 # MesoNet-Inception
 Classification Metrics:<br>
 Accuracy  : 0.8108<br>
