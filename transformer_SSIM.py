@@ -4,14 +4,13 @@ import cv2
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras import mixed_precision
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import random
 
 # load functions from helper_func.py
-from helper_func import get_video_prediction, evaluate_video_predictions
+from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator
 
 gpu = True
 # Use gpu if available
@@ -21,7 +20,6 @@ if gpu:
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
-        #mixed_precision.set_global_policy('mixed_float16')
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     print(os.environ['CUDA_VISIBLE_DEVICES'])  # Check the value
 
@@ -31,7 +29,7 @@ random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-batch_size = 8
+batch_size = 16
 # Create ImageDataGenerators
 train_datagen = ImageDataGenerator(
     rescale=1./255,              # Normalize pixel values to [0,1]
@@ -73,6 +71,36 @@ test_generator = test_datagen.flow_from_directory(
     shuffle=False 
 )
 
+import tensorflow as tf
+import os
+import numpy as np
+import cv2
+
+def get_generator_signature():
+    # Define output signature
+    image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
+    ssim_spec = tf.TensorSpec(shape=(None, 224, 224, 1), dtype=tf.float32)
+    ssim_stats_spec = tf.TensorSpec(shape=(None, 2), dtype=tf.float32)  # Changed from two separate specs to one (batch_size, 2)
+    label_spec = tf.TensorSpec(shape=(None,), dtype=tf.float32)
+
+    return ((image_spec, ssim_spec, ssim_stats_spec), label_spec)
+
+# Create generators with proper output signatures
+train_generator_dual = tf.data.Dataset.from_generator(
+    lambda: dual_input_generator(train_generator, 'train_ssim', 'train_ssim_var_mean'),
+    output_signature=get_generator_signature()
+)
+
+val_generator_dual = tf.data.Dataset.from_generator(
+    lambda: dual_input_generator(val_generator, 'val_ssim', 'val_ssim_var_mean'),
+    output_signature=get_generator_signature()
+)
+
+test_generator_dual = tf.data.Dataset.from_generator(
+    lambda: dual_input_generator(test_generator, 'test_ssim', 'test_ssim_var_mean'),
+    output_signature=get_generator_signature()
+)
+
 from sklearn.utils.class_weight import compute_class_weight
 
 class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=train_generator.classes)
@@ -88,8 +116,9 @@ print("Computed class weights:", class_weight_dict)
 threshold = 0.5
 
 
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Input, GlobalAveragePooling2D, Concatenate, BatchNormalization
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Dense, GlobalAveragePooling1D, Dropout, Input
 import keras
 from keras import layers
 
@@ -116,8 +145,7 @@ def mlp(x, hidden_units, dropout_rate):
     return x
 
 # create model
-def vit_model(in_shape,num_classes):
-    inputs = keras.Input(shape=in_shape)
+def vit_model(inputs,num_classes):
     
     # patching the input image into patches
     patching = layers.Conv2D(embed_dim, kernel_size=patch_size, strides=patch_size, padding='valid',name='patching')(inputs)
@@ -149,16 +177,62 @@ def vit_model(in_shape,num_classes):
     representation = layers.Dropout(0.5)(representation)
     
     features = mlp(representation,hidden_units=mlp_head_units,dropout_rate=0.5)
-    # Classify output
-    outputs = layers.Dense(num_classes, activation='sigmoid')(features)
+    # # Classify output
+    # outputs = layers.Dense(num_classes, activation='sigmoid')(features)
     
-    model = keras.models.Model(inputs=inputs, outputs=[outputs])
-    return model
+    # model = keras.models.Model(inputs=inputs, outputs=[outputs])
+    return features
 
-vit_classifier = vit_model((224,224,3), 1)
+input_shape = (224, 224)
+rgb_input = Input(shape=(*input_shape, 3), name="rgb_input")
+
+x1 = vit_model(rgb_input, 1)
+
+# 2. SSIM Branch
+ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
+ssim_branch = Sequential([
+    Conv2D(32, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    Conv2D(64, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    Conv2D(128, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    Conv2D(256, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+
+    GlobalAveragePooling2D(),
+
+    Dense(128, activation='relu', kernel_regularizer=l2(0.01)),  
+    Dropout(0.5),
+])
+
+x2 = ssim_branch(ssim_input)  # Correctly apply the input tensor
 
 
+# 3. SSIM Statistics Branch (Mean & Variance)
+ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
+ssim_stats_branch = Sequential([
+    Dense(16, activation='relu', input_shape=(2,)),
+    Dense(8, activation='relu')
+])
 
+x3 = ssim_stats_branch(ssim_stats_input)  # Correctly apply the input tensor
+
+# 4. Merge All Branches
+combined = Concatenate()([x1, x2, x3])
+# 4. Classification head
+output = Dense(1, activation='sigmoid')(combined)
+
+# 5. Build model
+model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
+# model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 import tensorflow.keras.backend as K
 
 def focal_loss(alpha=0.25, gamma=2.0):
@@ -169,9 +243,10 @@ def focal_loss(alpha=0.25, gamma=2.0):
         return K.mean(loss)
     return loss
 
-vit_classifier.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
 
-vit_classifier.summary()
+# Print model summary
+model.summary()
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
@@ -188,10 +263,10 @@ early_stopping_cb = EarlyStopping(monitor="val_loss",
                                   verbose=1)
 
 
-history = vit_classifier.fit(
-    train_generator,
+history = model.fit(
+    train_generator_dual,
     steps_per_epoch=len(train_generator),  # Use original generator's length
-    validation_data=val_generator,
+    validation_data=val_generator_dual,
     validation_steps=len(val_generator),   # Use original generator's length
     epochs=200,
     callbacks=[checkpoint_cb, early_stopping_cb],
@@ -199,7 +274,7 @@ history = vit_classifier.fit(
     verbose=1
 )
 
-predictions = vit_classifier.predict(test_generator, steps=len(test_generator), verbose=1)
+predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
@@ -213,3 +288,5 @@ metrics = evaluate_video_predictions(
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )
+
+mapping_label = {0: 'REAL', 1: 'FAKE'}
