@@ -57,3 +57,11 @@ Precision : 0.9592<br>
 Recall    : 0.7966<br>
 F1        : 0.8704<br>
 Auc_roc   : 0.9130
+
+# Transformer
+Classification Metrics:<br>
+Accuracy  : 0.7973<br>
+Precision : 0.7973<br>
+Recall    : 1.0000<br>
+F1        : 0.8872<br>
+Auc_roc   : 0.5000<br>

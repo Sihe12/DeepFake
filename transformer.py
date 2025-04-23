@@ -4,6 +4,7 @@ import cv2
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import mixed_precision
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
@@ -16,10 +17,11 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
+        #mixed_precision.set_global_policy('mixed_float16')
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     print(os.environ['CUDA_VISIBLE_DEVICES'])  # Check the value
 
@@ -29,7 +31,7 @@ random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-batch_size = 16
+batch_size = 8
 # Create ImageDataGenerators
 train_datagen = ImageDataGenerator(
     rescale=1./255,              # Normalize pixel values to [0,1]
@@ -86,14 +88,81 @@ print("Computed class weights:", class_weight_dict)
 threshold = 0.5
 
 
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, GlobalAveragePooling1D
-from transformers import TFViTForImageClassification
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Dense, GlobalAveragePooling1D, Dropout, Input
+import keras
+from keras import layers
 
-model = TFViTForImageClassification.from_pretrained(
-    "google/vit-base-patch16-224-in21k",
-    num_labels=2
-)
+# configure the parameters
+learning_rate = 0.001
+weight_decay = 0.0001
+batch_size = 256
+num_epochs = 10 # For real training, use num_epochs=100. 10 is a test value
+image_size = 224 # We'll resize input images to this size
+patch_size = 6 # Size of the patches to be extract from the input images
+num_patches = (image_size // patch_size) ** 2
+embed_dim = 64
+num_heads = 8
+transformer_layers = 3 # Size of the transformer layers block
+transfomer_units = [
+    embed_dim* 2,
+    embed_dim
+]
+mlp_head_units = [
+    2048,
+    1024
+]
+
+# implement multilayer percetron
+def mlp(x, hidden_units, dropout_rate):
+    for units in hidden_units:
+        x = layers.Dense(units,activation=keras.activations.gelu)(x)
+        x = layers.Dropout(dropout_rate)(x)
+    return x
+
+# create model
+def vit_model(in_shape,num_classes):
+    inputs = keras.Input(shape=in_shape)
+    
+    # patching the input image into patches
+    patching = layers.Conv2D(embed_dim, kernel_size=patch_size, strides=patch_size, padding='valid',name='patching')(inputs)
+    patches = layers.Reshape((num_patches, embed_dim), name='pacthes')(patching)
+    
+    # Learnable positional embeddings
+    position_embeddings = layers.Embedding(input_dim=num_patches, output_dim=embed_dim)(layers.Lambda(lambda x: tf.expand_dims(tf.range(num_patches), axis=0))(patches))
+
+    # Add positional embeddings to patches
+    patches = layers.Add()([patches,position_embeddings])
+    
+    # Create multiple layers of transformer block
+    for _ in range(transformer_layers):
+        # Create mulithead attention layer
+        attention_output = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim // num_heads)(patches,patches)
+        # skip connection 1
+        x2 = layers.Add()([attention_output, patches])
+        # Normalization 1
+        x2 = layers.LayerNormalization(epsilon=1e-6)(x2)
+        
+        # Feed forward network
+        x3 = mlp(x2, hidden_units=transfomer_units,dropout_rate=0.1)
+        #Skip connection 2
+        patches = layers.Add()([x3, x2])
+        # Normalization 2
+        patches = layers.LayerNormalization(epsilon=1e-6)(patches)
+        
+    representation = layers.Flatten()(patches)
+    representation = layers.Dropout(0.5)(representation)
+    
+    features = mlp(representation,hidden_units=mlp_head_units,dropout_rate=0.5)
+    # Classify output
+    outputs = layers.Dense(num_classes, activation='sigmoid')(features)
+    
+    model = keras.models.Model(inputs=inputs, outputs=[outputs])
+    return model
+
+vit_classifier = vit_model((224,224,3), 1)
+
+
 
 import tensorflow.keras.backend as K
 
@@ -105,9 +174,9 @@ def focal_loss(alpha=0.25, gamma=2.0):
         return K.mean(loss)
     return loss
 
-model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
+vit_classifier.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
 
-model.summary()
+vit_classifier.summary()
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
@@ -124,7 +193,7 @@ early_stopping_cb = EarlyStopping(monitor="val_loss",
                                   verbose=1)
 
 
-history = model.fit(
+history = vit_classifier.fit(
     train_generator,
     steps_per_epoch=len(train_generator),  # Use original generator's length
     validation_data=val_generator,
@@ -135,7 +204,7 @@ history = model.fit(
     verbose=1
 )
 
-predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
+predictions = vit_classifier.predict(test_generator, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
