@@ -31,7 +31,7 @@ random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-batch_size = 8
+batch_size = 16
 # Create ImageDataGenerators
 train_datagen = ImageDataGenerator(
     rescale=1./255,              # Normalize pixel values to [0,1]
