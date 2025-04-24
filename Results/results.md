@@ -58,6 +58,14 @@ Recall    : 0.7966<br>
 F1        : 0.8704<br>
 Auc_roc   : 0.9130
 
+# MesoNet-Inception SSIM
+Classification Metrics:<br>
+Accuracy  : 0.8919<br>
+Precision : 0.9474<br>
+Recall    : 0.9153<br>
+F1        : 0.9310<br>
+Auc_roc   : 0.9220
+
 # Transformer
 Classification Metrics:<br>
 Accuracy  : 0.7973<br>

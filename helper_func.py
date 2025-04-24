@@ -71,6 +71,7 @@ def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot(cmap=plt.cm.Blues, values_format='d')
     plt.title(f"{model_name} - Video-Level Prediction Confusion Matrix")
+    #plt.savefig(f"{model_name}_confusion_matrix.png")
     plt.show()
 
     # Plot ROC curve
@@ -83,6 +84,7 @@ def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=
     plt.title(f"{model_name} - ROC Curve")
     plt.legend(loc="lower right")
     plt.grid()
+    #plt.savefig(f"{model_name}_roc_curve.png")
     plt.show()
 
     # Print metrics
