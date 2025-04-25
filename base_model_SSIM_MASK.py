@@ -16,7 +16,7 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -196,6 +196,7 @@ output = Dense(1, activation='sigmoid')(combined)
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 import tensorflow.keras.backend as K
+import tensorflow_addons as tfa
 
 def focal_loss(alpha=0.25, gamma=2.0):
     def loss(y_true, y_pred):
@@ -205,7 +206,7 @@ def focal_loss(alpha=0.25, gamma=2.0):
         return K.mean(loss)
     return loss
 
-model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
 
 # Print model summary
 model.summary()

@@ -1,4 +1,4 @@
-tensorflow==2.19.0
+tensorflow==2.13.0
 numpy
 opencv-python
 imageio[ffmpeg]
@@ -8,5 +8,4 @@ pandas
 matplotlib
 scikit-learn
 tf-keras-vis
-imbalanced-learn
-tensorflow_hub
+tensorflow-addons==0.22.0

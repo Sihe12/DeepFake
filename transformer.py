@@ -169,8 +169,8 @@ def focal_loss(alpha=0.25, gamma=2.0):
         return K.mean(loss)
     return loss
 
-vit_classifier.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
-
+import tensorflow_addons as tfa
+vit_classifier.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
 vit_classifier.summary()
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping

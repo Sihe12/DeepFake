@@ -16,7 +16,7 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -129,6 +129,7 @@ model = Sequential([
 #                 metrics=['accuracy'])
 import tensorflow.keras.backend as K
 
+
 def focal_loss(alpha=0.25, gamma=2.0):
     def loss(y_true, y_pred):
         epsilon = K.epsilon()
@@ -137,7 +138,8 @@ def focal_loss(alpha=0.25, gamma=2.0):
         return K.mean(loss)
     return loss
 
-model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
+import tensorflow_addons as tfa
+model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
 
 model.summary()
 
