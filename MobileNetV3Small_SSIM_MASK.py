@@ -14,13 +14,13 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.regularizers import l2
 from sklearn.utils.class_weight import compute_class_weight
 
-from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator
+from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator, focal_loss
 from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 
 # GPU config
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 physical_devices = tf.config.list_physical_devices('GPU')
 for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -73,6 +73,7 @@ rgb_input = Input(shape=(*input_shape, 3), name="rgb_input")
 base_model = MobileNetV3Small(weights='imagenet', include_top=False, input_tensor=rgb_input)
 base_model.trainable = True
 x1 = GlobalAveragePooling2D()(base_model.output)
+x1 = Dropout(0.2)(x1)  
 x1 = Dense(1, activation='sigmoid')(x1)
 
 ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
@@ -106,17 +107,7 @@ combined = Concatenate()([x1, x2, x3])
 output = Dense(1, activation='sigmoid')(combined)
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 
-# Focal loss
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = tf.keras.backend.epsilon()
-        y_pred = tf.keras.backend.clip(y_pred, epsilon, 1.0 - epsilon)
-        loss = -y_true * alpha * tf.keras.backend.pow(1 - y_pred, gamma) * tf.keras.backend.log(y_pred) - \
-               (1 - y_true) * (1 - alpha) * tf.keras.backend.pow(y_pred, gamma) * tf.keras.backend.log(1 - y_pred)
-        return tf.keras.backend.mean(loss)
-    return loss
-
-model.compile(optimizer='adam', loss=focal_loss(alpha=0.25, gamma=2.0), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 model.summary()
 
 checkpoint_cb = ModelCheckpoint("mobilenetv3small_ssim_model.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)

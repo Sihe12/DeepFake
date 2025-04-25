@@ -10,7 +10,7 @@ import pandas as pd
 import random
 
 # load functions from helper_func.py
-from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator
+from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator, focal_loss
 
 gpu = True
 # Use gpu if available
@@ -125,17 +125,13 @@ from keras import layers
 image_size = 224 # We'll resize input images to this size
 patch_size = 6 # Size of the patches to be extract from the input images
 num_patches = (image_size // patch_size) ** 2
-embed_dim = 64
-num_heads = 8
-transformer_layers = 3 # Size of the transformer layers block
-transfomer_units = [
-    embed_dim* 2,
-    embed_dim
-]
-mlp_head_units = [
-    2048,
-    1024
-]
+embed_dim = 96
+num_heads = 6
+transformer_layers = 3 
+transformer_units = [192, 96] 
+
+mlp_head_units = [1024, 256] 
+
 
 # implement multilayer percetron
 def mlp(x, hidden_units, dropout_rate):
@@ -167,7 +163,7 @@ def vit_model(inputs,num_classes):
         x2 = layers.LayerNormalization(epsilon=1e-6)(x2)
         
         # Feed forward network
-        x3 = mlp(x2, hidden_units=transfomer_units,dropout_rate=0.1)
+        x3 = mlp(x2, hidden_units=transformer_units,dropout_rate=0.1)
         #Skip connection 2
         patches = layers.Add()([x3, x2])
         # Normalization 2
@@ -233,18 +229,8 @@ output = Dense(1, activation='sigmoid')(combined)
 # 5. Build model
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-import tensorflow.keras.backend as K
 
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
-        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
-        return K.mean(loss)
-    return loss
-
-import tensorflow_addons as tfa
-model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 # Print model summary
 model.summary()
 
@@ -288,5 +274,3 @@ metrics = evaluate_video_predictions(
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )
-
-mapping_label = {0: 'REAL', 1: 'FAKE'}

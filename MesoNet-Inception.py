@@ -12,7 +12,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.utils.class_weight import compute_class_weight
 
 # Egendefinerte funksjoner
-from helper_func import get_video_prediction, evaluate_video_predictions
+from helper_func import get_video_prediction, evaluate_video_predictions, focal_loss
 
 # Bruk GPU hvis tilgjengelig
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
@@ -133,23 +133,7 @@ output = Dense(1, activation='sigmoid')(x)
 
 model = Model(inputs=input_layer, outputs=output)
 
-
-# Compile the model
-# model.compile(optimizer=Adam(learning_rate=0.001),
-#               loss='mean_squared_error',
-#               metrics=['accuracy'])
-import tensorflow.keras.backend as K
-
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
-        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
-        return K.mean(loss)
-    return loss
-
-import tensorflow_addons as tfa
-model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 # Print model summary
 model.summary()
 

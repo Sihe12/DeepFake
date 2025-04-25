@@ -10,7 +10,7 @@ import pandas as pd
 import random
 
 # load functions from helper_func.py
-from helper_func import get_video_prediction, evaluate_video_predictions
+from helper_func import get_video_prediction, evaluate_video_predictions, focal_loss
 
 gpu = True
 # Use gpu if available
@@ -127,19 +127,8 @@ model = Sequential([
 # model.compile(optimizer='adam',
 #                 loss='binary_crossentropy',
 #                 metrics=['accuracy'])
-import tensorflow.keras.backend as K
 
-
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
-        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
-        return K.mean(loss)
-    return loss
-
-import tensorflow_addons as tfa
-model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 
 model.summary()
 
@@ -183,76 +172,3 @@ metrics = evaluate_video_predictions(
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )
-
-mapping_label = {0: 'REAL', 1: 'FAKE'}
-
-from tf_keras_vis.gradcam import Gradcam
-
-# Define the exit condition
-while True:
-    # Get a batch of test images
-    test_images, test_labels = next(test_generator)
-
-    # Select the first image from the batch for Grad-CAM visualization
-    sample_idx = 0  # You can change this to view different samples
-    rgb_image = test_images[sample_idx]
-    true_label = int(test_labels[sample_idx])  # Convert to 0 or 1
-
-    # Get model's prediction for this image
-    sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
-    predicted_class = 1 if sample_prediction > threshold else 0
-
-    penultimate_layer_name = None
-    for layer in reversed(model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            penultimate_layer_name = layer.name
-            break
-
-    # Create GradCAM object
-    gradcam = Gradcam(model)
-
-    def loss(output):
-        """Simple loss for binary classification"""
-        return output
-
-    # Generate heatmap - use last conv layer ('conv2d_2' in your model)
-    heatmap = gradcam(loss,
-                     np.expand_dims(rgb_image, axis=0),
-                     penultimate_layer=penultimate_layer_name)  # Use your last conv layer name
-
-    # Process heatmap
-    heatmap = np.squeeze(heatmap)
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= np.max(heatmap)
-
-    # Create visualization
-    rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)  # Convert to 0-255 range
-
-    # Simple overlay function if you don't have overlay_heatmap
-    def simple_overlay(image, heatmap, alpha=0.5):
-        heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
-
-    overlay = simple_overlay(rgb_image_uint8, heatmap)
-
-    # Plot results
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    plt.imshow(rgb_image_uint8)
-    plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
-    plt.axis('off')
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(overlay)
-    plt.title("Overlay")
-    plt.axis('off')
-
-    plt.tight_layout()
-    plt.show()
-
-    # Ask user if they are satisfied
-    user_input = input("Do you want to see another plot? Type 'exit' to stop, anything else to continue: ").strip().lower()
-    if user_input == 'exit':
-        break

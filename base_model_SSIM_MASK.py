@@ -10,7 +10,7 @@ import pandas as pd
 import random
 
 # load functions from helper_func.py
-from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator
+from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator, focal_loss
 
 gpu = True
 # Use gpu if available
@@ -195,18 +195,8 @@ output = Dense(1, activation='sigmoid')(combined)
 # 5. Build model
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-import tensorflow.keras.backend as K
-import tensorflow_addons as tfa
 
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
-        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
-        return K.mean(loss)
-    return loss
-
-model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 
 # Print model summary
 model.summary()
@@ -251,92 +241,3 @@ metrics = evaluate_video_predictions(
     class_names=["REAL", "FAKE"],
     model_name="Deepfake Detector"
 )
-
-mapping_label = {0: 'REAL', 1: 'FAKE'}
-
-# ... [Previous code remains the same until predictions] ...
-
-from tf_keras_vis.gradcam import Gradcam
-from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
-
-
-
-# Define the exit condition
-while True:
-    # Get a test batch from dual generator
-    (test_images, test_ssim, test_ssim_stats), test_labels = next(test_generator_dual.as_numpy_iterator())
-
-    # Select example
-    sample_idx = 0
-    rgb_image = test_images[sample_idx]
-    ssim_map = test_ssim[sample_idx]
-    true_label = int(test_labels[sample_idx])
-    ssim_stats = test_ssim_stats[sample_idx]
-    # Get prediction
-    sample_prediction = model.predict([
-        np.expand_dims(rgb_image, 0), 
-        np.expand_dims(ssim_map, 0),
-        np.expand_dims(ssim_stats, 0)  # Use combined stats tensor
-    ])[0][0]
-    predicted_class = 1 if sample_prediction > threshold else 0
-
-    penultimate_layer_name = None
-    for layer in reversed(model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            penultimate_layer_name = layer.name
-            break
-
-    # Create GradCAM object with modifier for binary classification
-    gradcam = Gradcam(model, model_modifier=ReplaceToLinear())
-
-    def loss(output):
-        """Simple loss for binary classification"""
-        return output
-
-    # Call Grad-CAM
-    heatmap = gradcam(
-        loss,
-        [np.expand_dims(rgb_image, axis=0), np.expand_dims(ssim_map, axis=0), np.expand_dims(ssim_stats, axis=0)],  # Ensure correct input format
-        penultimate_layer=penultimate_layer_name,
-        seek_penultimate_conv_layer=True,
-        expand_cam=False,  # Disable zooming for debugging
-        normalize_cam=True  # Optional: set to True to normalize heatmap
-    )
-
-    # Process heatmap
-    heatmap = np.squeeze(heatmap)
-    if len(heatmap.shape) > 2:  # If still multi-channel
-        heatmap = heatmap[0]  # Take first channel (or np.mean(heatmap, axis=0))
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= np.max(heatmap)
-
-    # Simple overlay function if you don't have overlay_heatmap
-    def simple_overlay(image, heatmap, alpha=0.5):
-        heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
-
-    # Visualization (same as before)
-    rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)
-    overlay = simple_overlay(rgb_image_uint8, heatmap)
-
-    # Plot results
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    plt.imshow(rgb_image_uint8)
-    plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
-    plt.axis('off')
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(overlay)
-    plt.title("Overlay")
-    plt.axis('off')
-
-    plt.tight_layout()
-    plt.show()
-    
-    # Ask user if they are satisfied
-    user_input = input("Do you want to see another plot? Type 'exit' to stop, anything else to continue: ").strip().lower()
-    if user_input == 'exit':
-        break

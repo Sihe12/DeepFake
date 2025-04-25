@@ -139,3 +139,15 @@ def dual_input_generator(base_gen, ssim_dir, var_mean_dir):
                 tf.convert_to_tensor(np.array(batch_ssim)), 
                 tf.convert_to_tensor(np.array(batch_ssim_stats), dtype=tf.float32)),  # Now shape (batch_size, 2)
                tf.convert_to_tensor(batch_y))
+        
+        
+import tensorflow.keras.backend as K
+
+
+def focal_loss(alpha=0.25, gamma=2.0):
+    def loss(y_true, y_pred):
+        epsilon = K.epsilon()
+        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
+        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
+        return K.mean(loss)
+    return loss

@@ -9,7 +9,7 @@ from tensorflow.keras.layers import (Input, Conv2D, MaxPooling2D, Flatten, Dense
                                      LeakyReLU, BatchNormalization, GlobalAveragePooling2D, Concatenate)
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.utils.class_weight import compute_class_weight
-from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator
+from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator, focal_loss
 from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 
@@ -126,19 +126,7 @@ output = Dense(1, activation='sigmoid')(x)
 
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 
-# Loss
-import tensorflow.keras.backend as K
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)
-        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - \
-               (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
-        return K.mean(loss)
-    return loss
-
-import tensorflow_addons as tfa
-model.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
+model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 model.summary()
 
 # Callbacks

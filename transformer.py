@@ -11,7 +11,7 @@ import pandas as pd
 import random
 
 # load functions from helper_func.py
-from helper_func import get_video_prediction, evaluate_video_predictions
+from helper_func import get_video_prediction, evaluate_video_predictions, focal_loss
 
 gpu = True
 # Use gpu if available
@@ -96,17 +96,12 @@ from keras import layers
 image_size = 224 # We'll resize input images to this size
 patch_size = 6 # Size of the patches to be extract from the input images
 num_patches = (image_size // patch_size) ** 2
-embed_dim = 64
-num_heads = 8
-transformer_layers = 3 # Size of the transformer layers block
-transfomer_units = [
-    embed_dim* 2,
-    embed_dim
-]
-mlp_head_units = [
-    2048,
-    1024
-]
+embed_dim = 96
+num_heads = 6
+transformer_layers = 3 
+transformer_units = [192, 96] 
+
+mlp_head_units = [1024, 256] 
 
 # implement multilayer percetron
 def mlp(x, hidden_units, dropout_rate):
@@ -139,7 +134,7 @@ def vit_model(in_shape,num_classes):
         x2 = layers.LayerNormalization(epsilon=1e-6)(x2)
         
         # Feed forward network
-        x3 = mlp(x2, hidden_units=transfomer_units,dropout_rate=0.1)
+        x3 = mlp(x2, hidden_units=transformer_units,dropout_rate=0.1)
         #Skip connection 2
         patches = layers.Add()([x3, x2])
         # Normalization 2
@@ -157,20 +152,7 @@ def vit_model(in_shape,num_classes):
 
 vit_classifier = vit_model((224,224,3), 1)
 
-
-
-import tensorflow.keras.backend as K
-
-def focal_loss(alpha=0.25, gamma=2.0):
-    def loss(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)  
-        loss = -y_true * alpha * K.pow(1 - y_pred, gamma) * K.log(y_pred) - (1 - y_true) * (1 - alpha) * K.pow(y_pred, gamma) * K.log(1 - y_pred)
-        return K.mean(loss)
-    return loss
-
-import tensorflow_addons as tfa
-vit_classifier.compile(optimizer='adam', loss=tfa.losses.SigmoidFocalCrossEntropy(reduction="sum"), metrics=['accuracy'])
+vit_classifier.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 vit_classifier.summary()
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
