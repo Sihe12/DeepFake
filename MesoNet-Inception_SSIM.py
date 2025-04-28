@@ -12,10 +12,12 @@ from sklearn.utils.class_weight import compute_class_weight
 from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator, focal_loss
 from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
+from sklearn.manifold import TSNE
+from tensorflow.keras.regularizers import l2
 
 # GPU
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 physical_devices = tf.config.list_physical_devices('GPU')
 for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -98,7 +100,7 @@ rgb_input = Input(shape=(224, 224, 3), name="rgb_input")
 ssim_input = Input(shape=(224, 224, 1), name="ssim_input")
 ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
 
-# RGB Branch (MesoInception-style)
+# Bygg RGB-branch
 x = meso_inception_block(rgb_input, filters=8)
 x = MaxPooling2D(pool_size=(2, 2), padding='same')(x)
 
@@ -113,42 +115,45 @@ x = Conv2D(16, (5, 5), padding='same', activation='relu')(x)
 x = BatchNormalization()(x)
 x = MaxPooling2D(pool_size=(4, 4), padding='same')(x)
 
-x1 = Flatten()(x)
+x = Flatten()(x)
+x = Dropout(0.5)(x)
+x = Dense(16)(x)
+x = LeakyReLU(alpha=0.1)(x)
+x1 = Dropout(0.5)(x)
+
+# Lag modellen
+#x1 = Model(inputs=rgb_input, outputs=x)
 
 
-# SSIM Branch (Functional)
-ssim_x = Conv2D(16, (3, 3), activation='relu', padding='same')(ssim_input)
-ssim_x = BatchNormalization()(ssim_x)
-ssim_x = MaxPooling2D((2, 2))(ssim_x)
+ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
+ssim_branch = Sequential([
+    Conv2D(32, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    Conv2D(128, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    Conv2D(256, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    GlobalAveragePooling2D(),
+    Dense(128, activation='relu', kernel_regularizer=l2(0.01)),
+    Dropout(0.5),
+])
+x2 = ssim_branch(ssim_input)
 
-ssim_x = Conv2D(32, (3, 3), activation='relu', padding='same')(ssim_x)
-ssim_x = BatchNormalization()(ssim_x)
-ssim_x = MaxPooling2D((2, 2))(ssim_x)
-
-ssim_x = Conv2D(64, (3, 3), activation='relu', padding='same')(ssim_x)
-ssim_x = BatchNormalization()(ssim_x)
-ssim_x = MaxPooling2D((2, 2))(ssim_x)
-
-ssim_x = GlobalAveragePooling2D()(ssim_x)
-x2 = Dense(64, activation='relu')(ssim_x)
-x2 = Dropout(0.5)(x2)
-
-
-# SSIM Stats Branch
+ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
 ssim_stats_branch = Sequential([
     Dense(16, activation='relu', input_shape=(2,)),
     Dense(8, activation='relu')
 ])
 x3 = ssim_stats_branch(ssim_stats_input)
 
-# Combine and Classify
 combined = Concatenate()([x1, x2, x3])
-x = Dropout(0.5)(combined)
-x = Dense(16)(x)
-x = LeakyReLU(alpha=0.1)(x)
-x = Dropout(0.5)(x)
-output = Dense(1, activation='sigmoid')(x)
-
+output = Dense(1, activation='sigmoid')(combined)
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 
 model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
@@ -156,7 +161,7 @@ model.summary()
 
 # Callbacks
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-checkpoint_cb = ModelCheckpoint("best_model_ssim_meso.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
+checkpoint_cb = ModelCheckpoint("best_model_ssim_meso_inception.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
 early_stopping_cb = EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True, verbose=1)
 
 # Train
@@ -185,7 +190,7 @@ metrics = evaluate_video_predictions(
     y_pred_binary=video_predictions_binary,
 
     class_names=["REAL", "FAKE"],
-    model_name="Deepfake Detector"
+    model_name="Deepfake Detector inception"
 )
 
 
@@ -224,7 +229,7 @@ plt.xlabel("TSNE component 1")
 plt.ylabel("TSNE component 2")
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("tsne_visualisering.png")
+plt.savefig("tsne_visualisering_inc.png")
 plt.close()
 count = 0
 
@@ -298,7 +303,7 @@ while True:
     plt.axis('off')
 
     plt.tight_layout()
-    plt.savefig(f"gradcam_overlay_{count}.png")
+    plt.savefig(f"gradcam_overlay_{count}_inc.png")
     #plt.show()
     count += 1
     

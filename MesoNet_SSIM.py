@@ -12,10 +12,12 @@ from sklearn.utils.class_weight import compute_class_weight
 from helper_func import get_video_prediction, evaluate_video_predictions, dual_input_generator, focal_loss
 from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
+from tensorflow.keras.regularizers import l2
+from sklearn.manifold import TSNE
 
 # GPU
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 physical_devices = tf.config.list_physical_devices('GPU')
 for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -75,7 +77,7 @@ ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
 
 # RGB Branch (MesoNet-style)
 rgb_branch = Sequential([
-    Conv2D(8, (3, 3), padding='same', activation='relu', input_shape=input_shape),
+    Conv2D(8, (3, 3), padding='same', activation='relu'),
     BatchNormalization(),
     MaxPooling2D(pool_size=(2, 2), padding='same'),
     
@@ -97,6 +99,7 @@ rgb_branch = Sequential([
     LeakyReLU(alpha=0.1),
     Dropout(0.5),
 ])
+
 x1 = rgb_branch(rgb_input)
 ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
 ssim_branch = Sequential([
@@ -143,7 +146,7 @@ history = model.fit(
     steps_per_epoch=len(train_generator),
     validation_data=val_generator_dual,
     validation_steps=len(val_generator),
-    epochs=200,
+    epochs=1,
     callbacks=[checkpoint_cb, early_stopping_cb],
     class_weight=class_weight_dict,
     verbose=1
@@ -171,7 +174,7 @@ mapping_label = {0: 'REAL', 1: 'FAKE'}
 
 from sklearn.manifold import TSNE
 
-feature_model = Model(inputs=model.input, outputs=model.layers[-3].output)
+feature_model = Model(inputs=model.input, outputs=model.get_layer('concatenate').output)
 
 all_images = []
 all_labels = []
