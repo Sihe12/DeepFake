@@ -71,7 +71,7 @@ The models are trained using the following parameters:
 | Efficient | 4,050,852 | 0.4730 | 0.7174 | 0.5593 | 0.6286 | 0.4124 |
 | Efficient SSIM | 4,473,830 | 0.7973 | 0.7973 | 1.0000 | 0.8872 | 0.4288 |
 | Transformer | 85,799,425 | 0.8243 | 0.8833 | 0.8983 | 0.8908 | 0.8023 |
-| Transformer SSIM | 86,222,401 | 0.7973 | 0.7973 | 1.0000 | 0.8872 | 0.5000 |
+| Transformer SSIM | 86,222,401 | 0.7162 | 0.8519 | 0.7797 | 0.8142 | 0.7548 |
 
 
 ### Setup
