@@ -75,55 +75,58 @@ ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
 
 # RGB Branch (MesoNet-style)
 rgb_branch = Sequential([
-    Conv2D(8, (3, 3), padding='same', activation='relu', input_shape=(224, 224, 3)),
+    Conv2D(8, (3, 3), padding='same', activation='relu', input_shape=input_shape),
     BatchNormalization(),
     MaxPooling2D(pool_size=(2, 2), padding='same'),
+    
     Conv2D(8, (5, 5), padding='same', activation='relu'),
     BatchNormalization(),
     MaxPooling2D(pool_size=(2, 2), padding='same'),
+    
     Conv2D(16, (5, 5), padding='same', activation='relu'),
     BatchNormalization(),
     MaxPooling2D(pool_size=(2, 2), padding='same'),
+    
     Conv2D(16, (5, 5), padding='same', activation='relu'),
     BatchNormalization(),
     MaxPooling2D(pool_size=(4, 4), padding='same'),
-    Flatten()
+    
+    Flatten(),
+    Dropout(0.5),
+    Dense(16),
+    LeakyReLU(alpha=0.1),
+    Dropout(0.5),
 ])
 x1 = rgb_branch(rgb_input)
+ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
+ssim_branch = Sequential([
+    Conv2D(32, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    Conv2D(128, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    Conv2D(256, (3, 3), activation='relu', padding='same'),
+    BatchNormalization(),
+    MaxPooling2D((2, 2)),
+    GlobalAveragePooling2D(),
+    Dense(128, activation='relu', kernel_regularizer=l2(0.01)),
+    Dropout(0.5),
+])
+x2 = ssim_branch(ssim_input)
 
-# SSIM Branch (Functional)
-ssim_x = Conv2D(16, (3, 3), activation='relu', padding='same')(ssim_input)
-ssim_x = BatchNormalization()(ssim_x)
-ssim_x = MaxPooling2D((2, 2))(ssim_x)
-
-ssim_x = Conv2D(32, (3, 3), activation='relu', padding='same')(ssim_x)
-ssim_x = BatchNormalization()(ssim_x)
-ssim_x = MaxPooling2D((2, 2))(ssim_x)
-
-ssim_x = Conv2D(64, (3, 3), activation='relu', padding='same')(ssim_x)
-ssim_x = BatchNormalization()(ssim_x)
-ssim_x = MaxPooling2D((2, 2))(ssim_x)
-
-ssim_x = GlobalAveragePooling2D()(ssim_x)
-x2 = Dense(64, activation='relu')(ssim_x)
-x2 = Dropout(0.5)(x2)
-
-
-# SSIM Stats Branch
+ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
 ssim_stats_branch = Sequential([
     Dense(16, activation='relu', input_shape=(2,)),
     Dense(8, activation='relu')
 ])
 x3 = ssim_stats_branch(ssim_stats_input)
 
-# Combine and Classify
 combined = Concatenate()([x1, x2, x3])
-x = Dropout(0.5)(combined)
-x = Dense(16)(x)
-x = LeakyReLU(alpha=0.1)(x)
-x = Dropout(0.5)(x)
-output = Dense(1, activation='sigmoid')(x)
-
+output = Dense(1, activation='sigmoid')(combined)
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 
 model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])

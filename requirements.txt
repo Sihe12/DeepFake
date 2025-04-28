@@ -8,3 +8,5 @@ pandas
 matplotlib
 scikit-learn
 tf-keras-vis
+vit-keras
+tensorflow-addons==0.22.0

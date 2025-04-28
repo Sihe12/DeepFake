@@ -82,77 +82,19 @@ class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 
 print("Computed class weights:", class_weight_dict)
 
-
-
-
 threshold = 0.5
 
+from vit_keras import vit
 
-from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Dense, GlobalAveragePooling1D, Dropout, Input
-import keras
-from keras import layers
-
-image_size = 224 # We'll resize input images to this size
-patch_size = 6 # Size of the patches to be extract from the input images
-num_patches = (image_size // patch_size) ** 2
-embed_dim = 96
-num_heads = 6
-transformer_layers = 3 
-transformer_units = [192, 96] 
-
-mlp_head_units = [1024, 256] 
-
-# implement multilayer percetron
-def mlp(x, hidden_units, dropout_rate):
-    for units in hidden_units:
-        x = layers.Dense(units,activation=keras.activations.gelu)(x)
-        x = layers.Dropout(dropout_rate)(x)
-    return x
-
-# create model
-def vit_model(in_shape,num_classes):
-    inputs = keras.Input(shape=in_shape)
-    
-    # patching the input image into patches
-    patching = layers.Conv2D(embed_dim, kernel_size=patch_size, strides=patch_size, padding='valid',name='patching')(inputs)
-    patches = layers.Reshape((num_patches, embed_dim), name='pacthes')(patching)
-    
-    # Learnable positional embeddings
-    position_embeddings = layers.Embedding(input_dim=num_patches, output_dim=embed_dim)(layers.Lambda(lambda x: tf.expand_dims(tf.range(num_patches), axis=0))(patches))
-
-    # Add positional embeddings to patches
-    patches = layers.Add()([patches,position_embeddings])
-    
-    # Create multiple layers of transformer block
-    for _ in range(transformer_layers):
-        # Create mulithead attention layer
-        attention_output = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim // num_heads)(patches,patches)
-        # skip connection 1
-        x2 = layers.Add()([attention_output, patches])
-        # Normalization 1
-        x2 = layers.LayerNormalization(epsilon=1e-6)(x2)
-        
-        # Feed forward network
-        x3 = mlp(x2, hidden_units=transformer_units,dropout_rate=0.1)
-        #Skip connection 2
-        patches = layers.Add()([x3, x2])
-        # Normalization 2
-        patches = layers.LayerNormalization(epsilon=1e-6)(patches)
-        
-    representation = layers.Flatten()(patches)
-    representation = layers.Dropout(0.5)(representation)
-    
-    features = mlp(representation,hidden_units=mlp_head_units,dropout_rate=0.5)
-    # Classify output
-    outputs = layers.Dense(num_classes, activation='sigmoid')(features)
-    
-    model = keras.models.Model(inputs=inputs, outputs=[outputs])
-    return model
-
-vit_classifier = vit_model((224,224,3), 1)
-
-vit_classifier.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
+vit_classifier = vit.vit_b16(
+    image_size=224,
+    activation='sigmoid',
+    pretrained=True,
+    include_top=True,
+    pretrained_top=False,
+    classes=1
+)
+vit_classifier.compile(optimizer='adam', loss="binary_crossentropy", metrics=['accuracy'])
 vit_classifier.summary()
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -193,5 +135,5 @@ metrics = evaluate_video_predictions(
     y_pred_binary=video_predictions_binary,
 
     class_names=["REAL", "FAKE"],
-    model_name="Deepfake Detector"
+    model_name="Deepfake Detector (Transformer)"
 )

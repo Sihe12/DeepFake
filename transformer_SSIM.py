@@ -16,7 +16,7 @@ gpu = True
 # Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     physical_devices = tf.config.list_physical_devices('GPU')
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -122,68 +122,19 @@ from tensorflow.keras.models import Model, Sequential
 import keras
 from keras import layers
 
-image_size = 224 # We'll resize input images to this size
-patch_size = 6 # Size of the patches to be extract from the input images
-num_patches = (image_size // patch_size) ** 2
-embed_dim = 96
-num_heads = 6
-transformer_layers = 3 
-transformer_units = [192, 96] 
+from vit_keras import vit
 
-mlp_head_units = [1024, 256] 
-
-
-# implement multilayer percetron
-def mlp(x, hidden_units, dropout_rate):
-    for units in hidden_units:
-        x = layers.Dense(units,activation=keras.activations.gelu)(x)
-        x = layers.Dropout(dropout_rate)(x)
-    return x
-
-# create model
-def vit_model(inputs,num_classes):
-    
-    # patching the input image into patches
-    patching = layers.Conv2D(embed_dim, kernel_size=patch_size, strides=patch_size, padding='valid',name='patching')(inputs)
-    patches = layers.Reshape((num_patches, embed_dim), name='pacthes')(patching)
-    
-    # Learnable positional embeddings
-    position_embeddings = layers.Embedding(input_dim=num_patches, output_dim=embed_dim)(layers.Lambda(lambda x: tf.expand_dims(tf.range(num_patches), axis=0))(patches))
-
-    # Add positional embeddings to patches
-    patches = layers.Add()([patches,position_embeddings])
-    
-    # Create multiple layers of transformer block
-    for _ in range(transformer_layers):
-        # Create mulithead attention layer
-        attention_output = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim // num_heads)(patches,patches)
-        # skip connection 1
-        x2 = layers.Add()([attention_output, patches])
-        # Normalization 1
-        x2 = layers.LayerNormalization(epsilon=1e-6)(x2)
-        
-        # Feed forward network
-        x3 = mlp(x2, hidden_units=transformer_units,dropout_rate=0.1)
-        #Skip connection 2
-        patches = layers.Add()([x3, x2])
-        # Normalization 2
-        patches = layers.LayerNormalization(epsilon=1e-6)(patches)
-        
-    representation = layers.Flatten()(patches)
-    representation = layers.Dropout(0.5)(representation)
-    
-    features = mlp(representation,hidden_units=mlp_head_units,dropout_rate=0.5)
-    # # Classify output
-    # outputs = layers.Dense(num_classes, activation='sigmoid')(features)
-    
-    # model = keras.models.Model(inputs=inputs, outputs=[outputs])
-    return features
+rgb_input = Input(shape=(224, 224, 3), name="rgb_input")  # <-- This is what you need
+x1 = vit.vit_b16(
+    image_size=224,
+    activation='sigmoid',
+    pretrained=True,
+    include_top=False,  # Changed to False since we're adding our own head
+    pretrained_top=False,
+    classes=1
+)(rgb_input)
 
 input_shape = (224, 224)
-rgb_input = Input(shape=(*input_shape, 3), name="rgb_input")
-
-x1 = vit_model(rgb_input, 1)
-
 # 2. SSIM Branch
 ssim_input = Input(shape=(*input_shape, 1), name="ssim_input")
 ssim_branch = Sequential([
@@ -230,7 +181,7 @@ output = Dense(1, activation='sigmoid')(combined)
 model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
+model.compile(optimizer='adam', loss="binary_crossentropy", metrics=['accuracy'])
 # Print model summary
 model.summary()
 
@@ -272,5 +223,5 @@ metrics = evaluate_video_predictions(
     y_pred_binary=video_predictions_binary,
 
     class_names=["REAL", "FAKE"],
-    model_name="Deepfake Detector"
+    model_name="Deepfake Detector (Transformer SSIM)"
 )

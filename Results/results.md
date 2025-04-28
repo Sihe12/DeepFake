@@ -82,3 +82,19 @@ Recall    : 1.0000<br>
 F1        : 0.8872<br>
 Auc_roc   : 0.5000<br>
 
+# MobileNet
+Classification Metrics:
+Accuracy  : 0.4054
+Precision : 0.8947
+Recall    : 0.2881
+F1        : 0.4359
+Auc_roc   : 0.7785
+
+# MobileNet SSIM
+Classification Metrics:
+Accuracy  : 0.5000
+Precision : 0.7895
+Recall    : 0.5085
+F1        : 0.6186
+Auc_roc   : 0.4475
+
