@@ -49,120 +49,29 @@ The models are trained using the following parameters:
 - **Loss Function**: Focal Loss with gamma=2.0 and alpha=0.25. But for ViT binary cross entropy is used.
 - **Metrics**: Accuracy, Precision, Recall, F1 Score, AUC
 - **Early Stopping**: The training is stopped if the validation loss does not improve for 50 epochs.
-
-# Base Model
-Classification Metrics:<br>
-Accuracy  : 0.8649<br>
-Precision : 0.9298<br>
-Recall    : 0.8983<br>
-F1        : 0.9138<br>
-Auc_roc   : 0.8927
-Parameters: 423,361
-
-# Base Model SSIM
-Classification Metrics:<br>
-Accuracy  : 0.7703<br>
-Precision : 0.9038<br>
-Recall    : 0.7966<br>
-F1        : 0.8468<br>
-Auc_roc   : 0.8554
-Parameters: 846,337
-![alt text](base:model_SSIM.png)
-
-# Efficient
-Classification Metrics:<br>
-Accuracy  : 0.4730<br>
-Precision : 0.7174<br>
-Recall    : 0.5593<br>
-F1        : 0.6286<br>
-Auc_roc   : 0.4124
-Parameters: 4,050,852
-
-# Efficient SSIM
-Classification Metrics:<br>
-Accuracy  : 0.7973<br>
-Precision : 0.7973<br>
-Recall    : 1.0000<br>
-F1        : 0.8872<br>
-Auc_roc   : 0.4288
-Parameters: 4,473,830
-
-# Mesonet
-Classification Metrics:<br>
-Accuracy  : 0.8919<br>
-Precision : 0.9474<br>
-Recall    : 0.9153<br>
-F1        : 0.9310<br>
-Auc_roc   : 0.9288
-Parameters: 24,233
-
-# Mesonet SSIM
-Classification Metrics:<br>
-Accuracy  : 0.8378<br>
-Precision : 0.9273<br>
-Recall    : 0.8644<br>
-F1        : 0.8947<br>
-Auc_roc   : 0.9141
-Parameters: 53,473 
-
-# MesoNet-Inception
-Classification Metrics:<br>
-Accuracy  : 0.8108<br>
-Precision : 0.9592<br>
-Recall    : 0.7966<br>
-F1        : 0.8704<br>
-Auc_roc   : 0.9130
-Parameters: 32,089 
-
-# MesoNet-Inception SSIM
-Classification Metrics:<br>
-Accuracy  : 0.8919<br>
-Precision : 0.9474<br>
-Recall    : 0.9153<br>
-F1        : 0.9310<br>
-Auc_roc   : 0.9220
-Parameters: 61,329
-
-# Transformer
-Classification Metrics:<br>
-Accuracy  : 0.7973<br>
-Precision : 0.7973<br>
-Recall    : 1.0000<br>
-F1        : 0.8872<br>
-Auc_roc   : 0.5000<br>
-Parameters: 85,799,425
-
-# Transformer SSIM
-Classification Metrics:<br>
-Accuracy  : 0.7973<br>
-Precision : 0.7973<br>
-Recall    : 1.0000<br>
-F1        : 0.8872<br>
-Auc_roc   : 0.5000<br>
-Parameters: 86,222,401
-
-# MobileNet
-Classification Metrics:
-Accuracy  : 0.4054
-Precision : 0.8947
-Recall    : 0.2881
-F1        : 0.4359
-Auc_roc   : 0.7785
-Parameters: 939,697
-
-# MobileNet SSIM
-Classification Metrics:
-Accuracy  : 0.5000
-Precision : 0.7895
-Recall    : 0.5085
-F1        : 0.6186
-Auc_roc   : 0.4475
-
+- **Data Augmentation**: The training data is augmented using the following techniques:
+    - **rescale=1./255**: Normalized pixel values to be between 0 and 1.
+    - **rotation_range=5**: Applied small rotations to the frame.
+    - **width_shift_range=0.03** and **height_shift_range=0.03**: Applied small shifts to the frame.
+    - **zoom_range=0.05**: Applied slight zoom.
+    - **horizontal_flip=True**: Applied flipping of the frame.
+    - **fill_mode=’reflect’**: Used reflection padding to fill the frame after doing the transformations.
 
 ### Result Summary
 | Model | Parameters | Accuracy | Precision | Recall | F1 Score | AUC ROC |
 |-------|------------|----------|-----------|--------|----------|---------|
-
+| Baseline | 423,361 | 0.8649 | 0.9298 | 0.8983 | 0.9138 | 0.8927 |
+| Baseline SSIM | 846,337 | 0.7703 | 0.9038 | 0.7966 | 0.8468 | 0.8554 |
+| MesoNet | 24,233 | 0.8919 | 0.9474 | 0.9153 | 0.9310 | 0.9288 |
+| MesoNet SSIM | 53,473 | 0.8378 | 0.9273 | 0.8644 | 0.8947 | 0.9141 |
+| MesoNet-Inception | 32,089 | 0.8108 | 0.9592 | 0.7966 | 0.8704 | 0.9130 |
+| MesoNet-Inception SSIM | 61,329 | 0.8919 | 0.9474 | 0.9153 | 0.9310 | 0.9220 |
+| MobileNet | 939,697 | 0.4054 | 0.8947 | 0.2881 | 0.4359 | 0.7785 |
+| MobileNet SSIM | 1,362,675 | 0.5000 | 0.7895 | 0.5085 | 0.6186 | 0.4475 |
+| Efficient | 4,050,852 | 0.4730 | 0.7174 | 0.5593 | 0.6286 | 0.4124 |
+| Efficient SSIM | 4,473,830 | 0.7973 | 0.7973 | 1.0000 | 0.8872 | 0.4288 |
+| Transformer | 85,799,425 | 0.8243 | 0.8833 | 0.8983 | 0.8908 | 0.8023 |
+| Transformer SSIM | 86,222,401 | 0.7973 | 0.7973 | 1.0000 | 0.8872 | 0.5000 |
 
 
 ### Setup
