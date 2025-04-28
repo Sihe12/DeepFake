@@ -44,12 +44,12 @@ Auc_roc   : 0.9288
 Parameters: 24,233
 
 # Mesonet SSIM
-Classification Metrics:<br>
-Accuracy  : 0.8378<br>
-Precision : 0.9273<br>
-Recall    : 0.8644<br>
-F1        : 0.8947<br>
-Auc_roc   : 0.9141
+Classification Metrics:
+Accuracy  : 0.8649
+Precision : 0.9804
+Recall    : 0.8475
+F1        : 0.9091
+Auc_roc   : 0.9650
 Parameters: 53,473 
 
 # MesoNet-Inception
@@ -80,12 +80,12 @@ Auc_roc   : 0.8023
 Parameters: 85,799,425
 
 # Transformer SSIM
-Classification Metrics:<br>
-Accuracy  : 0.7973<br>
-Precision : 0.7973<br>
-Recall    : 1.0000<br>
-F1        : 0.8872<br>
-Auc_roc   : 0.5000<br>
+Classification Metrics:
+Accuracy  : 0.7162
+Precision : 0.8519
+Recall    : 0.7797
+F1        : 0.8142
+Auc_roc   : 0.7548
 Parameters: 86,222,401
 
 # MobileNet
