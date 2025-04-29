@@ -130,3 +130,42 @@ threshold = 0.5
 predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 metrics = evaluate_video_predictions(y_true=video_true_value, y_pred_probs=video_predictions_probs, y_pred_binary=video_predictions_binary, class_names=["REAL", "FAKE"], model_name="Deepfake Detector MobileNetV3Small SSIM")
+
+
+mapping_label = {0: 'REAL', 1: 'FAKE'}
+
+from sklearn.manifold import TSNE
+
+feature_model = Model(inputs=model.input, outputs=model.get_layer('concatenate').output)
+
+all_images = []
+all_labels = []
+
+for (x_batch, y_batch) in test_generator_dual.take(len(test_generator)):
+    rgb_batch, ssim_batch, stats_batch = x_batch
+    all_images.append((rgb_batch, ssim_batch, stats_batch))
+    all_labels.append(y_batch)
+
+rgb_all = np.concatenate([x[0] for x in all_images], axis=0)
+ssim_all = np.concatenate([x[1] for x in all_images], axis=0)
+stats_all = np.concatenate([x[2] for x in all_images], axis=0)
+all_labels = np.concatenate(all_labels, axis=0)
+
+features = feature_model.predict([rgb_all, ssim_all, stats_all], batch_size=batch_size, verbose=1)
+
+tsne = TSNE(n_components=2, perplexity=30, learning_rate=200, random_state=SEED)
+features_2d = tsne.fit_transform(features)
+
+plt.figure(figsize=(10, 7))
+for label in np.unique(all_labels):
+    idx = all_labels == label
+    plt.scatter(features_2d[idx, 0], features_2d[idx, 1], label=mapping_label[int(label)], alpha=0.6)
+
+plt.legend()
+plt.title("TSNE of features")
+plt.xlabel("TSNE component 1")
+plt.ylabel("TSNE component 2")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+plt.close()

@@ -17,7 +17,7 @@ from tensorflow.keras.regularizers import l2
 
 # GPU
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '4'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 physical_devices = tf.config.list_physical_devices('GPU')
 for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -198,7 +198,7 @@ mapping_label = {0: 'REAL', 1: 'FAKE'}
 
 from sklearn.manifold import TSNE
 
-feature_model = Model(inputs=model.input, outputs=model.layers[-3].output)
+feature_model = Model(inputs=model.input, outputs=model.get_layer('concatenate').output)
 
 all_images = []
 all_labels = []
@@ -229,85 +229,5 @@ plt.xlabel("TSNE component 1")
 plt.ylabel("TSNE component 2")
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("tsne_visualisering_inc.png")
+plt.show()
 plt.close()
-count = 0
-
-while True:
-    test_batch = next(test_generator_dual.as_numpy_iterator())
-    (test_images, ssim_maps, ssim_stats), test_labels = test_batch
-
-    sample_idx = 0
-    rgb_image = test_images[sample_idx]
-    ssim_map = ssim_maps[sample_idx]
-    stats = ssim_stats[sample_idx]
-    true_label = int(test_labels[sample_idx])
-
-    sample_prediction = model.predict([
-        np.expand_dims(rgb_image, 0),
-        np.expand_dims(ssim_map, 0),
-        np.expand_dims(stats, 0)
-    ])[0][0]
-    predicted_class = 1 if sample_prediction > threshold else 0
-
-    penultimate_layer_name = None
-    for layer in reversed(model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            penultimate_layer_name = layer.name
-            break
-
-    gradcam = Gradcam(model, model_modifier=ReplaceToLinear())
-
-    def loss_fn(output): 
-        return output
-
-    heatmap = gradcam(
-        loss_fn,
-        [np.expand_dims(rgb_image, axis=0),
-        np.expand_dims(ssim_map, axis=0),
-        np.expand_dims(stats, axis=0)],
-        penultimate_layer=penultimate_layer_name,
-        seek_penultimate_conv_layer=True,
-        expand_cam=False,  # Viktig: slå av automatisk zooming
-        normalize_cam=True  # Normaliser output
-    )
-
-    # Process heatmap
-    heatmap = np.squeeze(heatmap)
-    if len(heatmap.shape) > 2:  # If still multi-channel
-        heatmap = heatmap[0]  # Take first channel (or np.mean(heatmap, axis=0))
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= np.max(heatmap)
-
-    # Simple overlay function if you don't have overlay_heatmap
-    def simple_overlay(image, heatmap, alpha=0.5):
-        heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        return cv2.addWeighted(image, alpha, heatmap, 1-alpha, 0)
-
-    # Visualization (same as before)
-    rgb_image_uint8 = (rgb_image * 255).astype(np.uint8)
-    overlay = simple_overlay(rgb_image_uint8, heatmap)
-
-    # Plot results
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    plt.imshow(rgb_image_uint8)
-    plt.title(f"Original\nTrue: {mapping_label[true_label]}\nPred: {mapping_label[predicted_class]} ({sample_prediction:.2f})")
-    plt.axis('off')
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(overlay)
-    plt.title("Overlay")
-    plt.axis('off')
-
-    plt.tight_layout()
-    plt.savefig(f"gradcam_overlay_{count}_inc.png")
-    #plt.show()
-    count += 1
-    
-    # Ask user if they are satisfied
-    user_input = input("Do you want to see another plot? Type 'exit' to stop, anything else to continue: ").strip().lower()
-    if user_input == 'exit':
-        break
