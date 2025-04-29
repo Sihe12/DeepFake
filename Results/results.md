@@ -34,7 +34,7 @@ F1        : 0.8872<br>
 Auc_roc   : 0.4288<br>
 Parameters: 4,473,830
 
-# Mesonet
+# MesoNet
 Classification Metrics:<br>
 Accuracy  : 0.8919<br>
 Precision : 0.9474<br>
@@ -43,14 +43,14 @@ F1        : 0.9310<br>
 Auc_roc   : 0.9288<br>
 Parameters: 24,233
 
-# MesoNet-Inception SSIM
+# MesoNet SSIM
 Classification Metrics:<br>
-Accuracy  : 0.8378<br>
-Precision : 0.9434<br>
+Accuracy  : 0.8649<br>
+Precision : 0.9804<br>
 Recall    : 0.8475<br>
-F1        : 0.8929<br>
-Auc_roc   : 0.9232<br>
-Parameters: 455,065
+F1        : 0.9091<br>
+Auc_roc   : 0.9650<br>
+Parameters: 447,209
 
 # MesoNet-Inception
 Classification Metrics:<br>
@@ -63,12 +63,12 @@ Parameters: 32,089
 
 # MesoNet-Inception SSIM
 Classification Metrics:<br>
-Accuracy  : 0.8919<br>
-Precision : 0.9474<br>
-Recall    : 0.9153<br>
-F1        : 0.9310<br>
-Auc_roc   : 0.9220<br>
-Parameters: 61,329
+Accuracy  : 0.8378<br>
+Precision : 0.9434<br>
+Recall    : 0.8475<br>
+F1        : 0.8929<br>
+Auc_roc   : 0.9232<br>
+Parameters: 455,065
 
 # Transformer
 Classification Metrics:<br>
