@@ -11,10 +11,8 @@ from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.utils.class_weight import compute_class_weight
 
-# Egendefinerte funksjoner
 from helper_func import get_video_prediction, evaluate_video_predictions, focal_loss
 
-# Bruk GPU hvis tilgjengelig
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -22,26 +20,23 @@ for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
 print("Num GPUs Available:", len(physical_devices))
 
-# Sett seed
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# Datageneratorer
 batch_size = 16
 train_datagen = ImageDataGenerator(
-    rescale=1./255,              # Normalize pixel values to [0,1]
+    rescale=1./255,             
     
-    # Mild geometric transformations (to avoid distorting faces)
-    rotation_range=5,            # Reduce rotation to prevent unnatural face angles
-    width_shift_range=0.03,      # Small shifts to avoid cropping face out
+    
+    rotation_range=5,            
+    width_shift_range=0.03,      
     height_shift_range=0.03,     
-    # Controlled distortions
-    zoom_range=0.05,             # Slight zoom without major distortion
-    horizontal_flip=True,        # Keep flipping (deepfakes can be mirrored)
+    zoom_range=0.05,             
+    horizontal_flip=True,        
 
-    fill_mode='reflect'          # Avoid unnatural padding artifacts
+    fill_mode='reflect'          
 )
 val_datagen = ImageDataGenerator(rescale=1./255)
 test_datagen = ImageDataGenerator(rescale=1./255)
@@ -69,7 +64,6 @@ test_generator = test_datagen.flow_from_directory(
     shuffle=False 
 )
 
-# Beregn class weights
 class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=train_generator.classes)
 class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 print("Class weights:", class_weight_dict)
@@ -79,7 +73,6 @@ from tensorflow.keras.layers import Conv2D, BatchNormalization, MaxPooling2D, Fl
 from tensorflow.keras.optimizers import Adam
 
 def meso_inception_block(x, filters):
-    # Reduksjon før dilated convs
     path1 = Conv2D(filters, (1, 1), padding='same')(x)
     path1 = BatchNormalization()(path1)
     path1 = LeakyReLU(alpha=0.1)(path1)
@@ -94,19 +87,16 @@ def meso_inception_block(x, filters):
     path2 = BatchNormalization()(path2)
     path2 = LeakyReLU(alpha=0.1)(path2)
 
-    # Skip connection
     skip = Conv2D(filters, (1, 1), padding='same')(x)
     skip = BatchNormalization()(skip)
     skip = LeakyReLU(alpha=0.1)(skip)
 
-    # Samle alle paths
     x = Concatenate()([path1, path2, skip])
     return x
 
 
 input_shape = (224, 224, 3)
 
-# Build the model
 input_layer = Input(shape=input_shape)
 x = meso_inception_block(input_layer, filters=8)
 x = MaxPooling2D(pool_size=(2, 2), padding='same')(x)
@@ -134,15 +124,12 @@ output = Dense(1, activation='sigmoid')(x)
 model = Model(inputs=input_layer, outputs=output)
 
 model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
-# Print model summary
 model.summary()
 
-# Callbacks
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 checkpoint_cb = ModelCheckpoint("best_model.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
 early_stopping_cb = EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True, verbose=1)
 
-# Tren modellen
 history = model.fit(
     train_generator,
     steps_per_epoch=len(train_generator),
@@ -154,14 +141,12 @@ history = model.fit(
     verbose=1
 )
 
-# Evaluer på testsettet
 threshold = 0.5
 predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
 
-# Evaluate
 metrics = evaluate_video_predictions(
     y_true=video_true_value,
     y_pred_probs = video_predictions_probs,
@@ -210,15 +195,12 @@ plt.show()
 plt.close()
 
 while True:
-    # Get a batch of test images
     test_images, test_labels = next(test_generator)
 
-    # Select the first image from the batch for Grad-CAM visualization
-    sample_idx = 0  # You can change this to view different samples
+    sample_idx = 0  
     rgb_image = test_images[sample_idx]
-    true_label = int(test_labels[sample_idx])  # Convert to 0 or 1
+    true_label = int(test_labels[sample_idx])  
 
-    # Get model's prediction for this image
     sample_prediction = model.predict(np.expand_dims(rgb_image, axis=0))[0][0]
     predicted_class = 1 if sample_prediction > threshold else 0
 
@@ -227,10 +209,8 @@ while True:
         if isinstance(layer, tf.keras.layers.Conv2D):
             penultimate_layer_name = layer.name
             break
-    # Create GradCAM object
     gradcam = Gradcam(model)
 
-    # Loop over de første 5 bildene
     for sample_idx in range(5):
         rgb_image = test_images[sample_idx]
         true_label = int(test_labels[sample_idx])

@@ -15,7 +15,6 @@ from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 from tensorflow.keras.regularizers import l2
 from sklearn.manifold import TSNE
 
-# GPU
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -23,13 +22,11 @@ for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
 print("Num GPUs Available:", len(physical_devices))
 
-# Seeds
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# Data Generators
 batch_size = 16
 input_shape = (224, 224)
 
@@ -51,7 +48,6 @@ class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=tra
 class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 print("Class weights:", class_weight_dict)
 
-# SSIM-aware generator
 
 def get_generator_signature():
     image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
@@ -70,12 +66,10 @@ test_generator_dual = tf.data.Dataset.from_generator(
     lambda: dual_input_generator(test_generator, 'test_ssim', 'test_ssim_var_mean'),
     output_signature=get_generator_signature())
 
-# Model Inputs
 rgb_input = Input(shape=(224, 224, 3), name="rgb_input")
 ssim_input = Input(shape=(224, 224, 1), name="ssim_input")
 ssim_stats_input = Input(shape=(2,), name="ssim_stats_input")
 
-# RGB Branch (MesoNet-style)
 rgb_branch = Sequential([
     Conv2D(8, (3, 3), padding='same', activation='relu'),
     BatchNormalization(),
@@ -135,12 +129,10 @@ model = Model(inputs=[rgb_input, ssim_input, ssim_stats_input], outputs=output)
 model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 model.summary()
 
-# Callbacks
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 checkpoint_cb = ModelCheckpoint("best_model_ssim_meso.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
 early_stopping_cb = EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True, verbose=1)
 
-# Train
 history = model.fit(
     train_generator_dual,
     steps_per_epoch=len(train_generator),
@@ -152,14 +144,12 @@ history = model.fit(
     verbose=1
 )
 
-# Grad-CAM Example Visualization
 threshold = 0.5
 predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
 
-# Evaluate
 metrics = evaluate_video_predictions(
     y_true=video_true_value,
     y_pred_probs = video_predictions_probs,
