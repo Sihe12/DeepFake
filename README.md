@@ -75,8 +75,11 @@ The models are trained using the following parameters:
 
 
 ### Setup
+Project used Python 3.10.
+We recommend running the experiments on a GPU. For the TensorFlow version we used (2.13) cuDNN 8.6 and CUDA 11.8 is required for GPU support.
+
 1. Clone the repository
-2. Install the required packages using the following command:
+3. Install the required packages using the following command:
 ```bash
 pip install -e .
 ```
