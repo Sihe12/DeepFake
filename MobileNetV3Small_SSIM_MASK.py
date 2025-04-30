@@ -18,7 +18,6 @@ from helper_func import get_video_prediction, evaluate_video_predictions, dual_i
 from tf_keras_vis.gradcam import Gradcam
 from tf_keras_vis.utils.model_modifiers import ReplaceToLinear
 
-# GPU config
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -26,13 +25,11 @@ for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
 print("Num GPUs Available:", len(physical_devices))
 
-# Seed
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# Data generators
 batch_size = 16
 train_datagen = ImageDataGenerator(
     rescale=1./255,
@@ -50,12 +47,10 @@ train_generator = train_datagen.flow_from_directory('train', target_size=(224, 2
 val_generator = val_datagen.flow_from_directory('val', target_size=(224, 224), batch_size=batch_size, class_mode='binary', shuffle=False)
 test_generator = test_datagen.flow_from_directory('test', target_size=(224, 224), batch_size=batch_size, class_mode='binary', shuffle=False)
 
-# Class weights
 class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=train_generator.classes)
 class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 print("Class weights:", class_weight_dict)
 
-# Generator signature
 def get_generator_signature():
     image_spec = tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32)
     ssim_spec = tf.TensorSpec(shape=(None, 224, 224, 1), dtype=tf.float32)
@@ -67,7 +62,6 @@ train_generator_dual = tf.data.Dataset.from_generator(lambda: dual_input_generat
 val_generator_dual = tf.data.Dataset.from_generator(lambda: dual_input_generator(val_generator, 'val_ssim', 'val_ssim_var_mean'), output_signature=get_generator_signature())
 test_generator_dual = tf.data.Dataset.from_generator(lambda: dual_input_generator(test_generator, 'test_ssim', 'test_ssim_var_mean'), output_signature=get_generator_signature())
 
-# Model architecture
 input_shape = (224, 224)
 rgb_input = Input(shape=(*input_shape, 3), name="rgb_input")
 base_model = MobileNetV3Small(weights='imagenet', include_top=False, input_tensor=rgb_input)
@@ -113,7 +107,6 @@ model.summary()
 checkpoint_cb = ModelCheckpoint("mobilenetv3small_ssim_model.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
 early_stopping_cb = EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True, verbose=1)
 
-# Train
 history = model.fit(
     train_generator_dual,
     steps_per_epoch=len(train_generator),
@@ -125,7 +118,6 @@ history = model.fit(
     verbose=1
 )
 
-# Test
 threshold = 0.5
 predictions = model.predict(test_generator_dual, steps=len(test_generator), verbose=1)
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)

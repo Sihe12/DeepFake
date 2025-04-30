@@ -13,10 +13,8 @@ from tensorflow.keras.applications import MobileNetV3Small
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from sklearn.utils.class_weight import compute_class_weight
 
-# Egendefinerte funksjoner
 from helper_func import get_video_prediction, evaluate_video_predictions, focal_loss
 
-# Bruk GPU hvis tilgjengelig
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -24,13 +22,11 @@ for gpu in physical_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
 print("Num GPUs Available:", len(physical_devices))
 
-# Sett seed
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# Datageneratorer
 batch_size = 16
 train_datagen = ImageDataGenerator(
     rescale=1./255,
@@ -65,12 +61,10 @@ test_generator = test_datagen.flow_from_directory(
     shuffle=False
 )
 
-# Beregn class weights
 class_weights = compute_class_weight("balanced", classes=np.array([0, 1]), y=train_generator.classes)
 class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 print("Class weights:", class_weight_dict)
 
-# Bygg modellen
 input_shape = (224, 224, 3)
 input_tensor = Input(shape=input_shape)
 
@@ -85,14 +79,11 @@ model = Model(inputs=base_model.input, outputs=x)
 
 model.compile(optimizer='adam', loss=focal_loss(), metrics=['accuracy'])
 
-# Print model summary
 model.summary()
 
-# Callbacks
 checkpoint_cb = ModelCheckpoint("mobilenetv3small_model.h5", monitor="val_loss", save_best_only=True, mode="min", verbose=1)
 early_stopping_cb = EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True, verbose=1)
 
-# Tren modellen
 history = model.fit(
     train_generator,
     steps_per_epoch=len(train_generator),
@@ -104,13 +95,11 @@ history = model.fit(
     verbose=1
 )
 
-# Evaluer på testsettet
 threshold = 0.5
 predictions = model.predict(test_generator, steps=len(test_generator), verbose=1)
 
 video_true_value, video_predictions_binary, video_predictions_probs = get_video_prediction(predictions, threshold, test_generator)
 
-# Evaluate
 metrics = evaluate_video_predictions(
     y_true=video_true_value,
     y_pred_probs=video_predictions_probs,
