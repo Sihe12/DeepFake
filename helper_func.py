@@ -8,13 +8,11 @@ import tensorflow as tf
 import cv2
 
 def get_video_prediction(predictions, threshold=0.5, test_generator=None):
-    # Extract video names from image filenames
-    image_filenames = test_generator.filenames  # From your test generator
+    image_filenames = test_generator.filenames  
     video_names = [os.path.splitext(os.path.basename(f))[0].split('_')[0] for f in image_filenames]
     
 
-    true_value = test_generator.classes  # True labels
-    # Use the equal video names index to get the predictions for each video
+    true_value = test_generator.classes  
     video_predictions = {}
     true_labels  = {}
     for video, pred in zip(video_names, predictions):
@@ -26,7 +24,6 @@ def get_video_prediction(predictions, threshold=0.5, test_generator=None):
         
     video_preds_raw = {}
 
-    # Calculate the total prediction for each video given the threshold
     video_preds = {}
 
     for video, preds in video_predictions.items():
@@ -39,7 +36,6 @@ def get_video_prediction(predictions, threshold=0.5, test_generator=None):
     y_pred_binary = np.array([video_preds[v] for v in videos])
     y_true = np.array([true_labels[v] for v in videos])
     
-    # Return the final predictions and true values as numpy arrays
     return y_true, y_pred_binary, y_pred_probs
 
 
@@ -54,40 +50,33 @@ def evaluate_video_predictions(y_true, y_pred_probs, y_pred_binary, class_names=
 
     from sklearn.metrics import roc_curve
 
-    # Calculate metrics
     metrics = {
         'accuracy': accuracy_score(y_true, y_pred_binary),
         'precision': precision_score(y_true, y_pred_binary),
         'recall': recall_score(y_true, y_pred_binary),
         'f1': f1_score(y_true, y_pred_binary),
-        'auc_roc': roc_auc_score(y_true, y_pred_probs)  # Use raw probabilities for AUC-ROC
+        'auc_roc': roc_auc_score(y_true, y_pred_probs)  
     }
     
-    # Confusion matrix
     cm = confusion_matrix(y_true, y_pred_binary, labels=[0, 1])
 
-    # Plot confusion matrix
     plt.figure(figsize=(8, 6))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot(cmap=plt.cm.Blues, values_format='d')
     plt.title(f"{model_name} - Video-Level Prediction Confusion Matrix")
-    #plt.savefig(f"{model_name}_confusion_matrix.png")
     plt.show()
 
-    # Plot ROC curve
     fpr, tpr, _ = roc_curve(y_true, y_pred_probs)
     plt.figure(figsize=(8, 6))
     plt.plot(fpr, tpr, color='blue', lw=2, label=f"ROC Curve (AUC = {metrics['auc_roc']:.4f})")
-    plt.plot([0, 1], [0, 1], color="grey", linestyle="--")  # Diagonal line (random guessing)
+    plt.plot([0, 1], [0, 1], color="grey", linestyle="--")  
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.title(f"{model_name} - ROC Curve")
     plt.legend(loc="lower right")
     plt.grid()
-    #plt.savefig(f"{model_name}_roc_curve.png")
     plt.show()
 
-    # Print metrics
     print("\nClassification Metrics:")
     for name, value in metrics.items():
         print(f"{name.capitalize():<10}: {value:.4f}")
@@ -100,9 +89,7 @@ def dual_input_generator(base_gen, ssim_dir, var_mean_dir):
         batch_x, batch_y = next(base_gen)
         
         batch_ssim = []
-        batch_ssim_stats = []  # Combined mean and variance into one list
-
-        # Get the actual filepaths used for this batch
+        batch_ssim_stats = []  
         current_indices = base_gen.index_array[
             (base_gen.batch_index * base_gen.batch_size) % len(base_gen.index_array):
             ((base_gen.batch_index + 1) * base_gen.batch_size) % len(base_gen.index_array)
@@ -112,33 +99,29 @@ def dual_input_generator(base_gen, ssim_dir, var_mean_dir):
             img_path = base_gen.filepaths[i]
             rel_path = os.path.relpath(img_path, base_gen.directory)
 
-            # Load SSIM map
             mask_path = os.path.join(ssim_dir, os.path.splitext(rel_path)[0] + '.npy')
             ssim_map = np.load(mask_path)
             ssim_map = cv2.resize(ssim_map, base_gen.target_size)
             batch_ssim.append(ssim_map[..., np.newaxis].astype(np.float32))  
 
-            # Load SSIM mean and variance
-            video_name = os.path.basename(img_path).split("_")[0]  # Extract video name
+            video_name = os.path.basename(img_path).split("_")[0] 
             var_mean_path = os.path.join(var_mean_dir, video_name + '.npy')
             
             if os.path.exists(var_mean_path):
                 mean_var_values = np.load(var_mean_path)
                 mean_ssim, variance_ssim = mean_var_values[0], mean_var_values[1]
             else:
-                mean_ssim, variance_ssim = 0.0, 0.0  # Default values if file is missing
+                mean_ssim, variance_ssim = 0.0, 0.0  
             
-            batch_ssim_stats.append([mean_ssim, variance_ssim])  # Combine into (2,) shape
+            batch_ssim_stats.append([mean_ssim, variance_ssim])  
 
-        # Ensure consistent batch size
         if len(batch_x) != len(batch_ssim):
             continue
 
-        # Convert to tensors and return in correct structure
         yield ((tf.convert_to_tensor(batch_x), 
                 tf.convert_to_tensor(np.array(batch_ssim)), 
-                tf.convert_to_tensor(np.array(batch_ssim_stats), dtype=tf.float32)),  # Now shape (batch_size, 2)
-               tf.convert_to_tensor(batch_y))
+                tf.convert_to_tensor(np.array(batch_ssim_stats), dtype=tf.float32)), 
+                tf.convert_to_tensor(batch_y))
         
         
 import tensorflow.keras.backend as K
