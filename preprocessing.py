@@ -2,7 +2,6 @@ import tensorflow as tf
 import os
 
 gpu = True
-# Use gpu if available
 if gpu:
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
     os.environ['CUDA_VISIBLE_DEVICES'] = '6'
@@ -10,12 +9,12 @@ if gpu:
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
-    print(os.environ['CUDA_VISIBLE_DEVICES'])  # Check the value
+    print(os.environ['CUDA_VISIBLE_DEVICES'])  
     
     
 import random
 import numpy as np
-# Set seed for reproducibility
+
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -33,106 +32,95 @@ import json
 from mtcnn import MTCNN
 from skimage.metrics import structural_similarity as ssim
 
-# Paths
 data_folder = "data"
 output_folder = "data_images"
 
-# If the output folder is not empty, skip processing
 if os.path.exists(output_folder) and len(os.listdir(output_folder)) > 0:
     print("Skipping processing: 'data_images' folder is already populated.")
 else:
     os.makedirs(output_folder, exist_ok=True)
     
-    # Initialize MTCNN
     detector = MTCNN()
     
-    # Parameters
     num_frames = 20
-    frame_interval = 15  # Base interval
-    max_consecutive_checks = 14  # Checking all frames up until the interval. We do not wont to lose data!
+    frame_interval = 15  
+    max_consecutive_checks = 14  
     frame_size = (224, 224)
     
-    # Load labels from metadata
     with open("data/metadata.json", "r") as f:
         video_labels = json.load(f)
     
-    # Dictionary to store image-label mappings
     image_labels = {}
     
-    # Process videos
     for video_name in os.listdir(data_folder):
         video_path = os.path.join(data_folder, video_name)
         
         if video_name.endswith(".mp4"):
             reader = imageio.get_reader(video_path, "ffmpeg")
             num_total_frames = reader.count_frames()
-            face_count = 0  # Track detected faces
-            prev_face = None  # Store the previous face crop
-            faces_to_save = []  # Temporarily store faces
+            face_count = 0  
+            prev_face = None  
+            faces_to_save = []  
             
             i = 0
             while i < num_total_frames and face_count < num_frames:
                 found = False
-                j = 0  # Reset j for each new interval search
+                j = 0  
 
-                # Search for a face within the next max_consecutive_checks frames
+                
                 while j < max_consecutive_checks and (i + j) < num_total_frames:
                     frame = reader.get_data(i + j)
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) if frame.ndim == 3 else cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
                     
                     faces = detector.detect_faces(frame_rgb, 
                                                   min_face_size =10,     
-                                                  threshold_pnet=0.5,  # More proposals from PNet
-                                                  threshold_rnet=0.6,  # Loosen RNet filtering
-                                                  threshold_onet=0.7   # More final faces accepted by ONet
+                                                  threshold_pnet=0.5,  
+                                                  threshold_rnet=0.6,  
+                                                  threshold_onet=0.7  
                                                   )
                     if faces:
                         found = True
-                        i += j  # Update i to where the face was found
-                        break  # Stop checking further
-                    j += 1  # Check next frame
+                        i += j  
+                        break  
+                    j += 1  
 
                 if not found:
-                    i += frame_interval  # If no face is found, skip ahead
-                    continue  # Restart the loop
+                    i += frame_interval  
+                    continue  
 
-                # Choose the best face using SSIM
+                
                 best_face = None
-                best_ssim = -1  # Initialize with the lowest SSIM
+                best_ssim = -1  
                 for face in faces:
                     x, y, w, h = face['box']
                     face_crop = frame[y:y+h, x:x+w]
                     face_resized = cv2.resize(face_crop, frame_size)
 
                     if prev_face is not None:
-                        # Convert images to grayscale for SSIM comparison
                         prev_gray = cv2.cvtColor(prev_face, cv2.COLOR_BGR2GRAY)
                         curr_gray = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
 
-                        # Compute SSIM
                         similarity = ssim(prev_gray, curr_gray)
 
                         if similarity > best_ssim:
                             best_ssim = similarity
                             best_face = face_resized
                     else:
-                        best_face = face_resized  # First face, no SSIM comparison needed
+                        best_face = face_resized  
 
-                prev_face = best_face  # Update previous face reference
+                prev_face = best_face  
                 
                 faces_to_save.append((best_face, f"{video_name.split('.')[0]}_{i}.jpg"))
                 face_count += 1
 
-                i += frame_interval - j  # Adjust for the extra search steps
+                i += frame_interval - j  
             
             reader.close()
             
-            # Ensure at least num_frames were extracted
             if face_count < num_frames:
                 print(f"Skipping video: {video_name} - Less than {num_frames} faces detected.")
                 continue
             
-            # Save extracted faces
             for face_resized, image_name in faces_to_save:
                 image_path = os.path.join(output_folder, image_name)
                 cv2.imwrite(image_path, face_resized)
@@ -142,7 +130,6 @@ else:
             
             print(f"Done with video {video_name}")
     
-    # Save label mappings
     with open("image_labels.json", "w") as f:
         json.dump(image_labels, f, indent=4)
     
@@ -157,14 +144,12 @@ image_labels = json.load(open("image_labels.json", "r"))
 movie_labels = {}
 
 for filename, label in image_labels.items():
-    movie_name = filename.split("_")[0]  # Extract movie name
-    movie_labels[movie_name] = label  # Store only one label per movie
+    movie_name = filename.split("_")[0]  
+    movie_labels[movie_name] = label  
     
-# Count the number of unique REAL and FAKE videos
 real_movies_count = sum(1 for label in movie_labels.values() if label == "REAL")
 fake_movies_count = sum(1 for label in movie_labels.values() if label == "FAKE")
 
-# Plotting the results
 labels = ['REAL', 'FAKE']
 counts = [real_movies_count, fake_movies_count]
 
@@ -175,7 +160,6 @@ plt.title('REAL vs FAKE Video Counts')
 plt.show()
 
 
-# load the images and labels and set it to a tf.data.Dataset
 
 import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
@@ -202,16 +186,13 @@ train, val = train_test_split(train, test_size=0.2, random_state=SEED, stratify=
 
 
 
-# Convert to sets for quick lookup
 train_movies = set(train[:, 0])
 val_movies = set(val[:, 0])
 test_movies = set(test[:, 0])
 
-# Function to filter images based on movie set
 def get_images_from_movies(movie_set, image_labels):
     return np.array([[img, label] for img, label in image_labels.items() if img.split("_")[0] in movie_set], dtype=object)
 
-# Filter images for each dataset
 train_images = get_images_from_movies(train_movies, image_labels)
 val_images = get_images_from_movies(val_movies, image_labels)
 test_images = get_images_from_movies(test_movies, image_labels)
@@ -244,14 +225,12 @@ axes[2].set_xlabel('Label')
 axes[2].set_ylabel('Number of Images')
 axes[2].set_title('Number of Images per Label in Test Set')
 
-# Display the plot
 plt.show()
 
 
 
 from PIL import Image
 
-# Mapping labels
 label_mapping = {"REAL": 0, "FAKE": 1}
 
 
@@ -271,7 +250,6 @@ def save_images(data, base_folder):
 if os.path.exists('train') and os.path.exists('val') and os.path.exists('test') and len(os.listdir(output_folder)) > 0:
     print("Skipping processing: 'train, val, test' folder is already full.")
 else:
-    # Save the images for each dataset
     save_images(train_images, 'train')
     save_images(val_images, 'val')
     save_images(test_images, 'test')
@@ -285,26 +263,23 @@ def precompute_intra_video_ssim_masks(dataset_dir, save_dir, var_mean_save_dir):
         label_save_dir = os.path.join(save_dir, label)
         label_var_mean_dir = os.path.join(var_mean_save_dir, label)
 
-        os.makedirs(label_save_dir, exist_ok=True)  # Create label directory
+        os.makedirs(label_save_dir, exist_ok=True)  
         os.makedirs(label_var_mean_dir, exist_ok=True)  
 
-        # Group frames by video
         video_frames = {}
         for img_file in os.listdir(label_dir):
-            video_name = img_file.split("_")[0]  # Extract video name
+            video_name = img_file.split("_")[0]  
             if video_name not in video_frames:
                 video_frames[video_name] = []
             video_frames[video_name].append(img_file)
 
-        # Sort frames to ensure correct order
         for video in video_frames:
             video_frames[video] = sorted(video_frames[video])
 
-        # Compute SSIM for each video
         for video_name, frames in video_frames.items():
             num_frames = len(frames)
 
-            ssim_scores = []  # Store SSIM scores for mean/variance calculation
+            ssim_scores = [] 
 
             for i in range(num_frames):
                 img_path = os.path.join(label_dir, frames[i])
@@ -312,7 +287,6 @@ def precompute_intra_video_ssim_masks(dataset_dir, save_dir, var_mean_save_dir):
 
                 img = cv2.resize(img, (224, 224))
 
-                # Select comparison frame
                 if i == 0:
                     next_frame_path = os.path.join(label_dir, frames[i + 1])
                     next_frame = cv2.imread(next_frame_path, cv2.IMREAD_GRAYSCALE)
@@ -325,12 +299,10 @@ def precompute_intra_video_ssim_masks(dataset_dir, save_dir, var_mean_save_dir):
                     prev_frame = cv2.resize(prev_frame, (224, 224))
                     score, ssim_map = ssim(img, prev_frame, full=True)
 
-                ssim_scores.append(score)  # Save SSIM score for stats
+                ssim_scores.append(score) 
 
-                # Normalize SSIM map to [0,1]
                 ssim_map = (ssim_map - ssim_map.min()) / (ssim_map.max() - ssim_map.min())
 
-                # Save SSIM mask as .npy
                 mask_path = os.path.join(label_save_dir, f"{os.path.splitext(frames[i])[0]}.npy")
                 np.save(mask_path, ssim_map.astype(np.float32))
                 
@@ -341,7 +313,6 @@ def precompute_intra_video_ssim_masks(dataset_dir, save_dir, var_mean_save_dir):
                     np.save(var_mean_path, np.array([mean_ssim, variance_ssim], dtype=np.float32))
             
                 
-# Precompute SSIM masks and variance/mean for each dataset
 if all(os.path.exists(folder) for folder in ['train_ssim', 'val_ssim', 'test_ssim']) and \
    all(os.path.exists(folder) for folder in ['train_ssim_var_mean', 'val_ssim_var_mean', 'test_ssim_var_mean']):
     print("Skipping processing: 'train_ssim, val_ssim, test_ssim, train_ssim_var_mean, val_ssim_var_mean, test_ssim_var_mean' folders already exist.")
