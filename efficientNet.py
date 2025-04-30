@@ -138,7 +138,7 @@ metrics = evaluate_video_predictions(
 mapping_label = {0: 'REAL', 1: 'FAKE'}
 from sklearn.manifold import TSNE
 
-feature_model = Model(inputs=model.input, outputs=model.layers[-3].output)
+feature_model = Model(inputs=model.input, outputs=model.layers[-2].output)
 
 all_images = []
 all_labels = []
